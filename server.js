@@ -153,13 +153,19 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
     console.log('[Gemini] uploaded file meta:', uploaded);
 
     // 2) Obtener referencia y esperar readiness
-    const fileRef = extractGeminiFileRef(uploaded);
-    if (!fileRef) throw new Error('No se obtuvo referencia del archivo (name/uri) de Gemini');
+  const fileRef = extractGeminiFileRef(uploaded);               // "files/ID" (para esperar)
+if (!fileRef) throw new Error('No se obtuvo referencia del archivo (name/uri) de Gemini');
 
-    await waitGeminiFileReady(fileRef, { timeoutMs: 45000, intervalMs: 1200 });
+await waitGeminiFileReady(fileRef, { timeoutMs: 45000, intervalMs: 1200 });
 
-    // 3) Analizar con Gemini
-    const result = await geminiAnalyze({ fileUri: fileRef, mimeType: file.mimetype });
+// Usa la URL completa para v1 (¡importante!)
+const fullFileUrl =
+  uploaded?.file?.uri ||
+  `https://generativelanguage.googleapis.com/v1beta/${fileRef}`;
+
+// 3) Analizar con Gemini (v1 + camelCase)
+const result = await geminiAnalyze({ fileUri: fullFileUrl, mimeType: file.mimetype });
+
 
     // 4) Guardar resultado
     await ref.set({
