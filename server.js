@@ -114,12 +114,13 @@ async function deleteGeminiFile(fileNameOrUri) {
 // ====== Gemini: generateContent ======
 // Intenta v1 (camelCase). Si el payload es rechazado, cae a v1beta (snake_case).
 // SOLO v1 (camelCase). Sin fallback a v1beta.
+// Reemplaza COMPLETO tu geminiAnalyze por esta
 async function geminiAnalyze({ fileUri, mimeType }) {
   // Asegúrate en Render: GEMINI_MODEL = models/gemini-1.5-pro-002
   const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
   const MODEL     = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
 
-  // Nota: mejor mantener primero fileData y después el prompt
+  // Nota: primero el prompt (text) y luego el archivo (file_data)
   const body = {
     contents: [
       {
@@ -129,7 +130,6 @@ async function geminiAnalyze({ fileUri, mimeType }) {
       {
         role: 'user',
         parts: [
-          { fileData: { fileUri, mimeType } },
           {
             text:
 `Evalúa el video adjunto con estas reglas:
@@ -148,13 +148,15 @@ Responde SOLO JSON con este esquema:
   ],
   "suggestions": string[]
 }`
-          }
+          },
+          { file_data: { file_uri: fileUri, mime_type: mimeType } }
         ]
       }
     ],
-    generationConfig: {
+    // En tu proyecto la API está esperando snake_case aquí
+    generation_config: {
       temperature: 0.2,
-      responseMimeType: 'application/json'
+      response_mime_type: 'application/json'
     }
   };
 
