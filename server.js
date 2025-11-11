@@ -34,6 +34,23 @@ const upload = multer({
   }
 });
 
+
+// Extrae la referencia válida para file_uri desde la respuesta de files:upload
+function extractGeminiFileRef(uploaded) {
+  const f = uploaded?.file;
+  if (!f) return null;
+
+  // Prefiere "files/xxxxx" (es lo que espera file_uri)
+  if (f.name) return f.name;
+
+  // Si solo viene la URI completa, la convertimos a "files/xxxxx"
+  if (f.uri) {
+    const m = f.uri.match(/\/files\/([^/]+)$/);
+    return m ? `files/${m[1]}` : f.uri;
+  }
+  return null;
+}
+
 // ====== Gemini: subida y análisis ======
 
 // Sube el buffer como archivo a Gemini Files (resumable) y devuelve el objeto File { name, uri, mime_type, ... }
@@ -159,16 +176,16 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
   try {
     // 1) Subir archivo a Gemini Files
     uploaded = await uploadToGemini(file.buffer, file.mimetype, file.originalname);
-    console.log('[Gemini] uploaded file meta:', uploaded); // debug
+    console.log('[Gemini] uploaded file meta:', uploaded);
 
-    // Algunos retornos traen `name` (files/xxx) pero no `uri`; ambos sirven como file_uri
-    const fileRef = uploaded?.uri || uploaded?.name;
+    // 2) Obtener referencia usable para file_uri
+    const fileRef = extractGeminiFileRef(uploaded);
     if (!fileRef) throw new Error('No se obtuvo referencia del archivo (name/uri) de Gemini');
 
-    // 2) Analizar con Gemini
+    // 3) Analizar con Gemini
     const result = await geminiAnalyze({ fileUri: fileRef, mimeType: file.mimetype });
 
-    // 3) Guardar resultado
+    // 4) Guardar resultado
     await ref.set({
       status: 'done',
       result,
@@ -187,12 +204,14 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
 
     return res.status(500).json({ ok: false, error: e?.message || 'Internal error' });
   } finally {
-    // 4) Limpieza del archivo remoto (best-effort)
-    if (uploaded?.name || uploaded?.uri) {
-      deleteGeminiFile(uploaded.name || uploaded.uri).catch(() => {});
+    // 5) Limpieza del archivo remoto (best-effort)
+    const toDelete = extractGeminiFileRef(uploaded);
+    if (toDelete) {
+      deleteGeminiFile(toDelete).catch(() => {});
     }
   }
 });
+
 
 
 
