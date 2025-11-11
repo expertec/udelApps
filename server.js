@@ -101,6 +101,7 @@ async function deleteGeminiFile(fileNameOrUri) {
 }
 
 // Llama a generateContent con file_uri
+// === REEMPLAZA COMPLETO ===
 async function geminiAnalyze({ fileUri, mimeType }) {
   const body = {
     contents: [
@@ -130,20 +131,22 @@ Responde SOLO JSON con este esquema:
   "suggestions": string[]
 }`
           },
-          { file_data: { file_uri: fileUri, mime_type: mimeType } }
+          // 👇 En v1 es camelCase
+          { fileData: { fileUri, mimeType } }
         ]
       }
     ],
+    // 👇 En v1 también es camelCase
     generationConfig: {
       temperature: 0.2,
-      response_mime_type: 'application/json'
+      responseMimeType: 'application/json'
     }
   };
 
-  // Usa v1 aquí. Si en env tienes "models/gemini-1.5-pro-002", déjalo tal cual.
   const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
   const MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
 
+  // 👇 Usa v1 con el modelo normalizado
   const url = `https://generativelanguage.googleapis.com/v1/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
   const res = await axios.post(url, body, {
@@ -154,6 +157,7 @@ Responde SOLO JSON con este esquema:
   const txt = res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
   return JSON.parse(txt);
 }
+
 
 
 
