@@ -113,11 +113,14 @@ async function deleteGeminiFile(fileNameOrUri) {
 
 // ====== Gemini: generateContent ======
 // Intenta v1 (camelCase). Si el payload es rechazado, cae a v1beta (snake_case).
+// SOLO v1 (camelCase). Sin fallback a v1beta.
 async function geminiAnalyze({ fileUri, mimeType }) {
-  const MODEL_V1  = GEMINI_MODEL; // normalizado arriba
+  // Asegúrate en Render: GEMINI_MODEL = models/gemini-1.5-pro-002
+  const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
+  const MODEL     = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
 
-  // ------- payload v1 (camelCase) -------
-  const bodyV1 = {
+  // Nota: mejor mantener primero fileData y después el prompt
+  const body = {
     contents: [
       {
         role: 'system',
@@ -155,70 +158,17 @@ Responde SOLO JSON con este esquema:
     }
   };
 
-  const urlV1 = `https://generativelanguage.googleapis.com/v1/${MODEL_V1}:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
-  try {
-    const r = await axios.post(urlV1, bodyV1, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 8 * 60_000
-    });
-    const txt = r?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    return JSON.parse(txt);
-  } catch (e) {
-    const is400 = e?.response?.status === 400;
-    const msg   = e?.response?.data?.error?.message || '';
-    const badNames = msg.includes('Unknown name "fileData"') || msg.includes('Unknown name "responseMimeType"');
-    if (!(is400 && badNames)) throw e;
-  }
-
-  // ------- fallback v1beta (snake_case) -------
-  const MODEL_V1BETA = 'models/gemini-1.5-pro'; // compatible en v1beta
-  const bodyV1beta = {
-    contents: [
-      {
-        role: 'system',
-        parts: [{ text: 'Eres un evaluador académico preciso y estricto, devuelves solo JSON válido.' }]
-      },
-      {
-        role: 'user',
-        parts: [
-          { file_data: { file_uri: fileUri, mime_type: mimeType } },
-          {
-            text:
-`Evalúa el video adjunto con estas reglas:
-- R1: Debe iniciar con una historia corta (sí/no y explica brevemente con timestamps si es posible).
-- R2: Incluir máximo 3 bullets (sí/no, cuenta los bullets y explica).
-- R3: Debe dejar una tarea al alumno (sí/no, describe la tarea; si falta, sugiere una).
-
-Responde SOLO JSON con este esquema:
-{
-  "score": number,
-  "summary": string,
-  "findings": [
-    {"ruleId":"R1","ok":boolean,"note":string},
-    {"ruleId":"R2","ok":boolean,"note":string},
-    {"ruleId":"R3","ok":boolean,"note":string}
-  ],
-  "suggestions": string[]
-}`
-          }
-        ]
-      }
-    ],
-    generation_config: {
-      temperature: 0.2,
-      response_mime_type: 'application/json'
-    }
-  };
-
-  const urlV1beta = `https://generativelanguage.googleapis.com/v1beta/${MODEL_V1BETA}:generateContent?key=${GEMINI_API_KEY}`;
-  const r2 = await axios.post(urlV1beta, bodyV1beta, {
+  const res = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
     timeout: 8 * 60_000
   });
-  const txt2 = r2?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  return JSON.parse(txt2);
+
+  const txt = res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  return JSON.parse(txt);
 }
+
 
 // ====== Endpoint principal ======
 app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
