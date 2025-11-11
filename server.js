@@ -1,17 +1,25 @@
-// ====== Config base ======
+// server.js - Analyzer API (Render)
+// Ejecuta: node server.js
+
+// ====== Dependencias ======
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import axios from 'axios';
-import FormData from 'form-data';
 import { admin, db, FieldValue } from './firebaseAdmin.js';
 
+// ====== App básica ======
 const app = express();
-app.use(cors());               // restringe orígenes si quieres
+app.use(cors());                 // Ajusta origin si quieres restringir
 app.use(express.json());
 
+// ====== Entorno ======
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL  = process.env.GEMINI_MODEL || 'gemini-1.5-pro'; // también vale 'gemini-1.5-pro-002'
+
+// Normaliza el modelo: acepta "gemini-1.5-pro-002" o "models/gemini-1.5-pro-002"
+const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
+const GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
+
 if (!GEMINI_API_KEY) {
   throw new Error('Falta GEMINI_API_KEY');
 }
@@ -21,34 +29,37 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
   fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith('video/')) return cb(new Error('Solo video/*'), false);
+    if (!file.mimetype?.startsWith('video/')) return cb(new Error('Solo se aceptan archivos de video'), false);
     cb(null, true);
   }
 });
 
-// ====== Gemini: subir archivo y analizar ======
+// ====== Gemini: subida y análisis ======
+
+// Sube el buffer como archivo a Gemini Files (resumable) y devuelve el objeto File { name, uri, mime_type, ... }
 async function uploadToGemini(buffer, mimeType, fileName) {
-  // 1) Crear recurso de subida (resumible)
+  // 1) Iniciar subida resumible con metadatos en el body
   const initRes = await axios.post(
     `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`,
-    null,
+    { file: { display_name: fileName || 'video.mp4', mime_type: mimeType } },
     {
       headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
         'X-Goog-Upload-Protocol': 'resumable',
         'X-Goog-Upload-Command': 'start',
-        'X-Goog-Upload-Header-Content-Length': buffer.length.toString(),
+        'X-Goog-Upload-Header-Content-Length': String(buffer.length),
         'X-Goog-Upload-Header-Content-Type': mimeType,
-        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Goog-Upload-File-Name': encodeURIComponent(fileName || 'video.mp4'),
       },
-      params: { fileId: fileName?.slice(0,80) || undefined },
       timeout: 60_000,
     }
   );
+
   const uploadUrl = initRes.headers['x-goog-upload-url'];
   if (!uploadUrl) throw new Error('No se obtuvo upload URL de Gemini');
 
-  // 2) Subir contenido
-  await axios.post(uploadUrl, buffer, {
+  // 2) Subir datos + finalizar; la respuesta YA es el objeto File
+  const finalizeRes = await axios.post(uploadUrl, buffer, {
     headers: {
       'Content-Type': mimeType,
       'X-Goog-Upload-Command': 'upload, finalize',
@@ -58,15 +69,13 @@ async function uploadToGemini(buffer, mimeType, fileName) {
     timeout: 10 * 60_000,
   });
 
-  // 3) Obtener metadatos del file
-  const metaRes = await axios.get(uploadUrl, { timeout: 30_000 });
-  // metaRes.data: { name, display_name, uri, mime_type, ... }
-  return metaRes.data; // devuelve {name, uri, mime_type, ...}
+  return finalizeRes.data; // { name, uri, mime_type, ... }
 }
 
+// Borra el archivo remoto en Gemini Files (best-effort)
 async function deleteGeminiFile(fileNameOrUri) {
   try {
-    // Puedes pasar name: "files/abc123" (name) o uri (mismo value aceptado)
+    if (!fileNameOrUri) return;
     const id = String(fileNameOrUri).replace(/^.*files\//, '');
     await axios.delete(
       `https://generativelanguage.googleapis.com/v1beta/files/${id}?key=${GEMINI_API_KEY}`,
@@ -77,6 +86,7 @@ async function deleteGeminiFile(fileNameOrUri) {
   }
 }
 
+// Llama a generateContent con file_uri
 async function geminiAnalyze({ fileUri, mimeType }) {
   const body = {
     contents: [
@@ -116,26 +126,27 @@ Responde SOLO JSON con este esquema:
     }
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const res = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
     timeout: 8 * 60_000
   });
 
-  // respuesta típica: { candidates:[{ content:{parts:[{text:"{...json...}"}]} }] }
   const txt = res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
   return JSON.parse(txt);
 }
 
-// ====== Endpoint ======
+// ====== Endpoint principal ======
 app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
   const { file } = req;
   const { analysisId } = req.body || {};
-  if (!analysisId) return res.status(400).json({ ok: false, error: 'analysisId requerido' });
-  if (!file) return res.status(400).json({ ok: false, error: 'file requerido' });
 
-  // marca processing (solo si quieres ver el doc de inmediato)
+  if (!analysisId) return res.status(400).json({ ok: false, error: 'analysisId requerido' });
+  if (!file)       return res.status(400).json({ ok: false, error: 'file requerido' });
+
   const ref = db.collection('analyses').doc(analysisId);
+
+  // Marca "processing" para que el front vea progreso
   await ref.set({
     status: 'processing',
     createdAt: FieldValue.serverTimestamp(),
@@ -144,12 +155,12 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
 
   let uploaded = null;
   try {
-    // 1) Subir a Gemini Files
+    // 1) Subir archivo a Gemini Files
     uploaded = await uploadToGemini(file.buffer, file.mimetype, file.originalname);
     const fileUri = uploaded?.uri; // ej: "files/abc123"
     if (!fileUri) throw new Error('No se obtuvo fileUri de Gemini');
 
-    // 2) Analizar
+    // 2) Analizar con Gemini
     const result = await geminiAnalyze({ fileUri, mimeType: file.mimetype });
 
     // 3) Guardar resultado
@@ -169,22 +180,27 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
     }, { merge: true });
     res.status(500).json({ ok: false, error: e?.message || 'Internal error' });
   } finally {
-    // 4) limpieza del archivo remoto
+    // 4) Limpieza del archivo remoto (best-effort)
     if (uploaded?.name || uploaded?.uri) {
       deleteGeminiFile(uploaded.name || uploaded.uri).catch(() => {});
     }
   }
 });
 
-// opcional: /health mejorado
-app.get('/health', async (req, res) => {
+// ====== Endpoint de salud ======
+app.get('/health', async (_req, res) => {
   try {
-    await db.listCollections();
-    res.json({ ok: true, projectId: admin.app().options.projectId });
+    await db.listCollections(); // fuerza auth con Firestore
+    res.json({
+      ok: true,
+      projectId: admin.app().options.projectId,
+      model: GEMINI_MODEL
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
 });
 
+// ====== Inicio ======
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log('Analyzer listening on', PORT));
