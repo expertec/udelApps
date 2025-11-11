@@ -137,6 +137,8 @@ Responde SOLO JSON con este esquema:
 }
 
 // ====== Endpoint principal ======
+// ====== Endpoint principal (reemplaza toda esta función) ======
+// ====== Endpoint principal (reemplaza toda esta función) ======
 app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
   const { file } = req;
   const { analysisId } = req.body || {};
@@ -157,11 +159,14 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
   try {
     // 1) Subir archivo a Gemini Files
     uploaded = await uploadToGemini(file.buffer, file.mimetype, file.originalname);
-    const fileUri = uploaded?.uri; // ej: "files/abc123"
-    if (!fileUri) throw new Error('No se obtuvo fileUri de Gemini');
+    console.log('[Gemini] uploaded file meta:', uploaded); // debug
+
+    // Algunos retornos traen `name` (files/xxx) pero no `uri`; ambos sirven como file_uri
+    const fileRef = uploaded?.uri || uploaded?.name;
+    if (!fileRef) throw new Error('No se obtuvo referencia del archivo (name/uri) de Gemini');
 
     // 2) Analizar con Gemini
-    const result = await geminiAnalyze({ fileUri, mimeType: file.mimetype });
+    const result = await geminiAnalyze({ fileUri: fileRef, mimeType: file.mimetype });
 
     // 3) Guardar resultado
     await ref.set({
@@ -170,15 +175,17 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
 
-    res.json({ ok: true, analysisId });
+    return res.json({ ok: true, analysisId });
   } catch (e) {
     console.error('analyzeVideo error:', e?.response?.status, e?.response?.data || String(e));
+
     await ref.set({
       status: 'error',
       error: e?.response?.data?.error?.message || e.message || 'unknown',
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
-    res.status(500).json({ ok: false, error: e?.message || 'Internal error' });
+
+    return res.status(500).json({ ok: false, error: e?.message || 'Internal error' });
   } finally {
     // 4) Limpieza del archivo remoto (best-effort)
     if (uploaded?.name || uploaded?.uri) {
@@ -186,6 +193,8 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
     }
   }
 });
+
+
 
 // ====== Endpoint de salud ======
 app.get('/health', async (_req, res) => {
