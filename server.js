@@ -120,22 +120,85 @@ async function geminiAnalyze({ fileUri, mimeType }) {
           },
           {
             text:
-`Evalúa el video adjunto con estas reglas:
-- R1: Debe iniciar con una historia corta (sí/no y explica brevemente con timestamps si es posible).
-- R2: Incluir máximo 3 bullets (sí/no, cuenta los bullets y explica).
-- R3: Debe dejar una tarea al alumno (sí/no, describe la tarea; si falta, sugiere una).
+`Evalúa el video adjunto con este enfoque “Clase tipo Platzi”. Usa el audio + transcripción + metadatos si están disponibles. NO inventes datos: si algo no puede detectarse, márcalo como "unknown". Responde SOLO JSON con el esquema indicado.
 
-Responde SOLO JSON con este esquema:
+REGLAS (con IDs y pesos para el score):
+- R1_HOOK (peso 10): Inicia con historia/pregunta/demostración del resultado (<=60s). Detecta si existe, su tipo y su timestamp inicial y final.
+- R2_OUTCOMES (peso 10): Declara 1–2 objetivos de aprendizaje medibles en los primeros 90s. Extrae texto si aparece.
+- R3_MAPA (peso 8): Presenta un mapa de 3–4 pasos (roadmap) al inicio (<=90s). Cuenta bullets/pasos.
+- R4_BULLETS_MAX3 (peso 6): En pantalla o en voz, no usar más de 3 bullets simultáneos. Cuenta el máximo detectado y dónde ocurre.
+- R5_DEMO_MICROLOGROS (peso 14): Hay demo práctica con micro-logros cada 60–90s (ej.: test pasa, endpoint responde, UI cambia). Lista micro-logros con timestamps.
+- R6_PRACTICA (peso 12): Deja una tarea “tu turno” con verificación esperada (output/criterios). Extrae instrucción y expected output si existe.
+- R7_RECAP_CTA (peso 8): Cierra con recap breve (qué se logró) + siguiente paso/CTA (qué viene en el curso).
+- R8_RECURSOS (peso 8): Provee recursos concretos (repo, snippet, .env ejemplo, diagrama, links docs). Lista los detectados.
+- R9_RITMO (peso 12): Ritmo ágil: cortes/pausas útiles; segmentos sin valor explicativo >120s penalizan. Detecta segmentos densos (timestamps).
+- R10_AUDIO_VIDEO (peso 12): Audio claro (sin ruido notable, volumen estable), tipografía legible (>=16–18pt), contraste suficiente. Marca problemas si se perciben.
+
+CÁLCULO DE SCORE:
+- Cada regla produce un sub-score 0–100 según cumplimiento y evidencias. El score final es el promedio ponderado por “peso”. Si una regla es "unknown", ignórala del denominador y repórtala en "unknownRules".
+- Si R4_BULLETS_MAX3 se incumple, resta adicionalmente 5 puntos al total (pero nunca por debajo de 0).
+
+DETALLES QUE DEBES ENTREGAR POR REGLA:
+- ok: boolean
+- subScore: number (0–100)
+- note: string (breve explicación)
+- evidence: { timestamps?: [{start:number,end:number,description:string}], count?: number, text?: string[] }
+- suggestions: string[] (acciones específicas, p.ej. “reduce bullets a 3”, “agrega expected output”)
+
+SALIDAS EXTRA:
+- summary: Máx 2–3 frases, enfoque en utilidad para el creador de la clase.
+- findings: arreglo con los objetos por regla (en el orden R1…R10).
+- suggestions: Top 5 acciones priorizadas (una por línea, imperativas).
+- unknownRules: string[] con los ruleId no evaluables.
+- assetsDetected: { links: string[], repo:boolean, snippets:boolean, envExample:boolean, diagram:boolean }
+- structure: { hook:{start,end,type}, outcomes:string[], mapa:{steps:string[], count:number}, microLogros:[{t:number,desc:string}], practica:{instruccion:string, expected:string}, recap:boolean, cta:string|null }
+- pacing: { longSegments:[{start,end,desc}], avgMicroLogroGapSec:number|null }
+- compliance: { bulletsMax:int, bulletsBreaches:[{t:number,count:int}] }
+
+ESQUEMA JSON EXACTO:
 {
-  "score": number,
+  "score": number,               // 0–100 final ponderado (aplica penalización de R4 si corresponde)
   "summary": string,
   "findings": [
-    {"ruleId":"R1","ok":boolean,"note":string},
-    {"ruleId":"R2","ok":boolean,"note":string},
-    {"ruleId":"R3","ok":boolean,"note":string}
+    {"ruleId":"R1_HOOK","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R2_OUTCOMES","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R3_MAPA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R4_BULLETS_MAX3","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R5_DEMO_MICROLOGROS","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R6_PRACTICA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R7_RECAP_CTA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R8_RECURSOS","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R9_RITMO","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]},
+    {"ruleId":"R10_AUDIO_VIDEO","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string[]}
   ],
-  "suggestions": string[]
-}`
+  "suggestions": string[],        // Top 5 acciones priorizadas
+  "unknownRules": string[],
+  "assetsDetected": {
+    "links": string[],
+    "repo": boolean,
+    "snippets": boolean,
+    "envExample": boolean,
+    "diagram": boolean
+  },
+  "structure": {
+    "hook": {"start": number|null, "end": number|null, "type": "historia"|"pregunta"|"demo"|"unknown"},
+    "outcomes": string[],
+    "mapa": {"steps": string[], "count": number},
+    "microLogros": [{"t": number, "desc": string}],
+    "practica": {"instruccion": string|null, "expected": string|null},
+    "recap": boolean,
+    "cta": string|null
+  },
+  "pacing": {
+    "longSegments": [{"start": number, "end": number, "desc": string}],
+    "avgMicroLogroGapSec": number|null
+  },
+  "compliance": {
+    "bulletsMax": number|null,
+    "bulletsBreaches": [{"t": number, "count": number}]
+  }
+}
+`
           }
         ]
       }
