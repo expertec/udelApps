@@ -485,7 +485,7 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
     const score = result.score || 0;
     let vimeoUrl = null;
 
-    if (score >= 80) {
+    if (score >= 10) {
       console.log(`[Análisis] Score ${score}% >= 80% - Iniciando subida a Vimeo...`);
       
       // Actualizar estado en Firestore
