@@ -119,15 +119,14 @@ async function geminiAnalyze({ fileUri, mimeType }) {
             } 
           },
           {
-            text:
+        text:
+`Evalúa el video adjunto como clase en video optimizada para atención y aprendizaje y calidad técnica profesional. Usa audio + transcripción + metadatos (resolución, fps, bitrate, sample rate, canales) si están disponibles. No inventes datos: si algo no puede detectarse, márcalo como "unknown". Responde SOLO JSON con el esquema indicado al final.
 
-`Evalúa el video adjunto como clase en video optimizada para atención y aprendizaje.  No inventes datos: si algo no puede detectarse, márcalo como "unknown". Responde SOLO JSON con el esquema indicado al final.
-
-REGLAS (basadas en mejores prácticas de aprendizaje, con IDs y pesos):
+REGLAS (mejores prácticas pedagógicas + estándares técnicos, con IDs y pesos):
 
 R1_HOOK (peso 8): Inicio con historia/pregunta/demo del resultado <=30s. Detecta tipo y timestamps.
 
-R2_OBJETIVOS (peso 8): 1–2 objetivos observables al inicio (<=90s) con verbo de logro (“crear”, “resolver”, “comparar”). Extrae texto si aparece.
+R2_OBJETIVOS (peso 8): 1–2 objetivos observables al inicio (<=90s) con verbo de logro. Extrae texto si aparece.
 
 R3_MAPA_3PASOS (peso 6): Roadmap de máx. 3 pasos visible o verbal. Cuenta pasos y ubicación.
 
@@ -141,85 +140,56 @@ R7_DEMO_INMEDIATA (peso 8): Tras cada concepto clave hay demo/ejemplo práctico 
 
 R8_PRACTICA_ACTIVA (peso 12): ≥2 micro-prácticas (tu turno/pausa/mini-reto) intercaladas cada 2–4 min. Lista instrucciones y tiempos.
 
-R9_RECUPERACION (peso 8): Chequeo rápido de recuerdo/compresión (pregunta, mini-quiz) con retro breve. Detecta ítems y respuesta/clave si existe.
+R9_RECUPERACION (peso 8): Chequeo rápido de recuerdo/comprensión (pregunta, mini-quiz) con retro breve. Detecta ítems y respuesta/clave si existe.
 
 R10_TRANSFERENCIA (peso 8): Caso/aplicación al mundo real (dataset, API, situación realista). Describe el caso y dónde ocurre.
 
 R11_CIERRE_RECAP (peso 6): Recap de 3 bullets (≤10 palabras c/u) + errores comunes. Extrae texto si aparece.
 
-R12_TAREA_Y_CRITERIOS (peso 12): Tarea aplicable (≤20 min) con entregable y criterios de evaluación (rubrica/checklist). Extrae ambos si existen.
+R12_TAREA_Y_CRITERIOS (peso 12): Tarea aplicable (≤20 min) con entregable y criterios de evaluación (rúbrica/checklist). Extrae ambos si existen.
 
-R13_RITMO_ACCESIBILIDAD (peso 12): Ritmo ágil (sin pantalla estática >20s; cortes/cambios cada 60–90s), audio inteligible (volumen estable, sin ruido), y accesibilidad (subtítulos/CC o transcripción). Marca problemas si se perciben.
+R13_RITMO_ACCESIBILIDAD (peso 8): Ritmo ágil (sin pantalla estática >20s; cortes/cambios cada 60–90s), accesibilidad (subtítulos/CC o transcripción). Marca problemas si se perciben.
+
+— Estándares de calidad técnica profesional —
+
+R14_MEDIA_VIDEO (peso 10): Imagen: resolución >=1080p, fps estable (>=24), exposición/contraste adecuados (sin clipping severo), balance de blancos consistente (piel natural), enfoque nítido en el rostro o contenido, iluminación uniforme (sin sombras duras sobre ojos), encuadre correcto (regla de tercios, headroom adecuado), fondo no distractor (ruido visual bajo), sin artefactos de compresión graves.
+• Si hay metadatos, extrae resolución/fps/bitrate.
+• Si no, estima por observación y marca lo desconocido como "unknown".
+• Reporta timestamps de problemas (desenfoque, flicker, sobreexposición, banding, moiré).
+
+R15_MEDIA_AUDIO (peso 12): Sonido: inteligible y limpio, sin clipping. Objetivo de loudness -16 a -12 LUFS (voz), picos ≤ -1 dBTP, ruido de fondo < -50 dBFS (estimado), sample rate >= 44.1 kHz, canales mono/estéreo correctos, distancia de mic adecuada (proximidad sin popping), sin eco/reverberación excesiva, sin viento o zumbidos.
+• Si hay metadatos, extrae sample rate, canales, bitrate.
+• Si no, estima con descriptores cualitativos (“ruido de ventilador”, “eco sala”).
+• Reporta timestamps de ruidos, pops, sibilancia, inconsistencia de volumen.
+
+R16_MEDIA_PRESENTACION (peso 8): Consistencia y branding: tipografía legible (≥18 pt aprox.), contraste suficiente, paleta consistente, lower-thirds legibles, transiciones sobrias, coincidencia A/V (lab-sync correcto), estabilidad de cámara (sin temblores notorios), gráficos con altísimo contraste y accesibles (evitar combinaciones rojo/verde críticas). Reporta fallos con timestamps.
 
 CÁLCULO DEL SCORE:
-
-Cada regla produce subScore 0–100 según cumplimiento y evidencia. El score final es el promedio ponderado por “peso”.
-
-Si una regla es "unknown", no la cuentes en el denominador y añádela a unknownRules.
-
-Penalización: si R4_CARGA_COGNITIVA detecta >3 bullets simultáneos, resta 5 puntos al score total (sin bajar de 0).
+• Cada regla produce subScore 0–100 según cumplimiento y evidencia. El score final es el promedio ponderado por “peso”.
+• Si una regla es "unknown", no la cuentes en el denominador y añádela a unknownRules.
+• Penalización: si R4_CARGA_COGNITIVA detecta >3 bullets simultáneos, resta 5 puntos al score total (sin bajar de 0).
 
 DETALLES A ENTREGAR POR REGLA:
-
-ok: boolean
-
-subScore: number (0–100)
-
-note: string (breve explicación accionable)
-
-evidence: { timestamps?: [{start:number,end:number,description:string}], count?: number, text?: string[], pairs?: [{concept:string, demoT:number}] }
-
-suggestions: string[] (mejoras concretas: “limita a 3 bullets”, “inserta micro-reto al min 3”)
+• ok: boolean
+• subScore: number (0–100)
+• note: string (breve explicación accionable)
+• evidence: { timestamps?: [{start:number,end:number,description:string}], count?: number, text?: string[], pairs?: [{concept:string, demoT:number}], meta?: object }
+• suggestions: string[] (mejoras concretas)
 
 MÉTRICAS (si es posible, aproxima):
-
-duracion_min (number)
-
-max_bullets_por_slide (number)
-
-palabras_promedio_por_bullet (number)
-
-micropracticas_count (number)
-
-bloques_count (number)
-
-mayor_estatico_seg (number)
-
-cortes_por_min (number)
-
-wpm_aprox (number)
-
-cc_subtitulos (boolean)
+duracion_min, max_bullets_por_slide, palabras_promedio_por_bullet, micropracticas_count, bloques_count, mayor_estatico_seg, cortes_por_min, wpm_aprox, cc_subtitulos, video_resolution_px (ej. "1920x1080" o unknown), video_fps, video_bitrate_mbps, audio_lufs, audio_peak_db, noise_floor_db, sample_rate_hz, audio_channels (1|2|unknown), lab_sync_ok (boolean|null), lighting_evenness_0_100 (estimado), white_balance_ok (boolean|null), focus_ok (boolean|null), stabilization_ok (boolean|null), compression_artifacts (boolean|null).
 
 SALIDAS EXTRA:
-
-summary: 2–3 frases útiles para el docente.
-
-findings: arreglo con objetos por regla (R1…R13).
-
-suggestions: Top 5 acciones priorizadas (una por línea, imperativas).
-
-unknownRules: string[] con los ruleId no evaluables.
-
+summary (2–3 frases útiles para el docente); findings (R1…R16); suggestions (Top 5 acciones priorizadas); unknownRules;
 assetsDetected: { links:string, repo:boolean, snippets:boolean, plantillas:boolean, rubrica:boolean }
-
-structure: {
-hook:{start:number|null,end:number|null,type:"historia"|"pregunta"|"demo"|"unknown"},
-objetivos:string,
-mapa:{steps:string,count:number},
-paresConceptoDemo:[{concept:string, demoT:number}],
-microPracticas:[{t:number, instruccion:string}],
-recuperacion:[{t:number, pregunta:string, clave:string|null}],
-casoReal:{t:number|null, descripcion:string|null},
-recap:{bullets:string},
-tarea:{instruccion:string|null, entregable:string|null, criterios:string}
-}
-
-pacing: { longSegments:[{start:number,end:number,desc:string}], avgGapMicroPracticeSec:number|null }
-
-compliance: { bulletsMax:number|null, bulletsBreaches:[{t:number,count:number}] }
-
+structure: { hook:{start,end,type}, objetivos:string, mapa:{steps,count}, paresConceptoDemo:[{concept,demoT}], microPracticas:[{t,instruccion}], recuperacion:[{t,pregunta,clave}], casoReal:{t,descripcion}, recap:{bullets}, tarea:{instruccion,entregable,criterios} }
+pacing: { longSegments:[{start,end,desc}], avgGapMicroPracticeSec }
+compliance: { bulletsMax, bulletsBreaches:[{t,count}] }
 accessibility: { cc:boolean, transcript:boolean, contrast_ok:boolean|null, font_legible:boolean|null, audio_ok:boolean|null }
+mediaAnalysis: {
+video: { resolution_px:string|null, fps:number|null, bitrate_mbps:number|null, exposure_ok:boolean|null, white_balance_ok:boolean|null, lighting_evenness_0_100:number|null, focus_ok:boolean|null, framing_ok:boolean|null, headroom_ok:boolean|null, background_distraction:boolean|null, compression_artifacts:boolean|null, stabilization_ok:boolean|null, issues:[{t:number,desc:string}] },
+audio: { lufs:number|null, peak_db:number|null, noise_floor_db:number|null, sample_rate_hz:number|null, channels:number|null, clipping:boolean|null, reverb_echo:boolean|null, pops_sibilance:boolean|null, hum_hiss:boolean|null, mic_distance_ok:boolean|null, consistency_ok:boolean|null, issues:[{t:number,desc:string}] }
+}
 
 ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
 {
@@ -238,7 +208,10 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
 {"ruleId":"R10_TRANSFERENCIA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
 {"ruleId":"R11_CIERRE_RECAP","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
 {"ruleId":"R12_TAREA_Y_CRITERIOS","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R13_RITMO_ACCESIBILIDAD","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string}
+{"ruleId":"R13_RITMO_ACCESIBILIDAD","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
+{"ruleId":"R14_MEDIA_VIDEO","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
+{"ruleId":"R15_MEDIA_AUDIO","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
+{"ruleId":"R16_MEDIA_PRESENTACION","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string}
 ],
 "suggestions": string[],
 "unknownRules": string[],
@@ -275,6 +248,37 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
 "font_legible": boolean|null,
 "audio_ok": boolean|null
 },
+"mediaAnalysis": {
+"video": {
+"resolution_px": string|null,
+"fps": number|null,
+"bitrate_mbps": number|null,
+"exposure_ok": boolean|null,
+"white_balance_ok": boolean|null,
+"lighting_evenness_0_100": number|null,
+"focus_ok": boolean|null,
+"framing_ok": boolean|null,
+"headroom_ok": boolean|null,
+"background_distraction": boolean|null,
+"compression_artifacts": boolean|null,
+"stabilization_ok": boolean|null,
+"issues": [{"t": number, "desc": string}]
+},
+"audio": {
+"lufs": number|null,
+"peak_db": number|null,
+"noise_floor_db": number|null,
+"sample_rate_hz": number|null,
+"channels": number|null,
+"clipping": boolean|null,
+"reverb_echo": boolean|null,
+"pops_sibilance": boolean|null,
+"hum_hiss": boolean|null,
+"mic_distance_ok": boolean|null,
+"consistency_ok": boolean|null,
+"issues": [{"t": number, "desc": string}]
+}
+},
 "metrics": {
 "duracion_min": number,
 "max_bullets_por_slide": number,
@@ -284,10 +288,26 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
 "mayor_estatico_seg": number,
 "cortes_por_min": number,
 "wpm_aprox": number,
-"cc_subtitulos": boolean
+"cc_subtitulos": boolean,
+"video_resolution_px": string,
+"video_fps": number,
+"video_bitrate_mbps": number,
+"audio_lufs": number,
+"audio_peak_db": number,
+"noise_floor_db": number,
+"sample_rate_hz": number,
+"audio_channels": number,
+"lab_sync_ok": boolean,
+"lighting_evenness_0_100": number,
+"white_balance_ok": boolean,
+"focus_ok": boolean,
+"stabilization_ok": boolean,
+"compression_artifacts": boolean
 }
 }
 `
+
+
           }
         ]
       }
