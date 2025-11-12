@@ -1,10 +1,11 @@
-// server.js - Analyzer API (Render)
+// server.js - Analyzer API (Render) con integración Vimeo
 
 // ====== Dependencias ======
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import axios from 'axios';
+import FormData from 'form-data';
 import { admin, db, FieldValue } from './firebaseAdmin.js';
 
 // ====== App básica ======
@@ -16,7 +17,14 @@ app.use(express.json());
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
 const GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
+
+// Vimeo API credentials
+const VIMEO_ACCESS_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
+const VIMEO_CLIENT_ID = process.env.VIMEO_CLIENT_ID;
+const VIMEO_CLIENT_SECRET = process.env.VIMEO_CLIENT_SECRET;
+
 if (!GEMINI_API_KEY) throw new Error('Falta GEMINI_API_KEY');
+if (!VIMEO_ACCESS_TOKEN) console.warn('⚠️  VIMEO_ACCESS_TOKEN no configurado - la subida a Vimeo no funcionará');
 
 // ====== Multer (memoria) ======
 const upload = multer({
@@ -132,9 +140,9 @@ R3_MAPA_3PASOS (peso 6): Roadmap de máx. 3 pasos visible o verbal. Cuenta pasos
 
 R4_CARGA_COGNITIVA (peso 8): Diapositivas limpias (≤3 bullets simultáneos, ≤10 palabras/bullet). Reporta máximos y breaches.
 
-R5_SEGMENTACION (peso 8): Clase en 2–4 bloques con señalización (“Parte 1/3”, títulos, marcadores). Lista bloques con timestamps.
+R5_SEGMENTACION (peso 8): Clase en 2–4 bloques con señalización ("Parte 1/3", títulos, marcadores). Lista bloques con timestamps.
 
-R6_SENALIZACION (peso 6): Guías visuales/verbales (cursor, zoom, resaltado, “Paso 2 de 3”) al introducir conceptos. Evidencia con momentos.
+R6_SENALIZACION (peso 6): Guías visuales/verbales (cursor, zoom, resaltado, "Paso 2 de 3") al introducir conceptos. Evidencia con momentos.
 
 R7_DEMO_INMEDIATA (peso 8): Tras cada concepto clave hay demo/ejemplo práctico inmediato. Vincula concepto→demo por timestamp.
 
@@ -159,13 +167,13 @@ R14_MEDIA_VIDEO (peso 10): Imagen: resolución >=1080p, fps estable (>=24), expo
 
 R15_MEDIA_AUDIO (peso 12): Sonido: inteligible y limpio, sin clipping. Objetivo de loudness -16 a -12 LUFS (voz), picos ≤ -1 dBTP, ruido de fondo < -50 dBFS (estimado), sample rate >= 44.1 kHz, canales mono/estéreo correctos, distancia de mic adecuada (proximidad sin popping), sin eco/reverberación excesiva, sin viento o zumbidos.
 • Si hay metadatos, extrae sample rate, canales, bitrate.
-• Si no, estima con descriptores cualitativos (“ruido de ventilador”, “eco sala”).
+• Si no, estima con descriptores cualitativos ("ruido de ventilador", "eco sala").
 • Reporta timestamps de ruidos, pops, sibilancia, inconsistencia de volumen.
 
 R16_MEDIA_PRESENTACION (peso 8): Consistencia y branding: tipografía legible (≥18 pt aprox.), contraste suficiente, paleta consistente, lower-thirds legibles, transiciones sobrias, coincidencia A/V (lab-sync correcto), estabilidad de cámara (sin temblores notorios), gráficos con altísimo contraste y accesibles (evitar combinaciones rojo/verde críticas). Reporta fallos con timestamps.
 
 CÁLCULO DEL SCORE:
-• Cada regla produce subScore 0–100 según cumplimiento y evidencia. El score final es el promedio ponderado por “peso”.
+• Cada regla produce subScore 0–100 según cumplimiento y evidencia. El score final es el promedio ponderado por "peso".
 • Si una regla es "unknown", no la cuentes en el denominador y añádela a unknownRules.
 • Penalización: si R4_CARGA_COGNITIVA detecta >3 bullets simultáneos, resta 5 puntos al score total (sin bajar de 0).
 
@@ -191,28 +199,16 @@ video: { resolution_px:string|null, fps:number|null, bitrate_mbps:number|null, e
 audio: { lufs:number|null, peak_db:number|null, noise_floor_db:number|null, sample_rate_hz:number|null, channels:number|null, clipping:boolean|null, reverb_echo:boolean|null, pops_sibilance:boolean|null, hum_hiss:boolean|null, mic_distance_ok:boolean|null, consistency_ok:boolean|null, issues:[{t:number,desc:string}] }
 }
 
-ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
+Esquema JSON obligatorio:
 {
-"score": number,
+"score": number (0–100),
 "summary": string,
-"findings": [
-{"ruleId":"R1_HOOK","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R2_OBJETIVOS","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R3_MAPA_3PASOS","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R4_CARGA_COGNITIVA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R5_SEGMENTACION","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R6_SENALIZACION","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R7_DEMO_INMEDIATA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R8_PRACTICA_ACTIVA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R9_RECUPERACION","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R10_TRANSFERENCIA","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R11_CIERRE_RECAP","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R12_TAREA_Y_CRITERIOS","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R13_RITMO_ACCESIBILIDAD","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R14_MEDIA_VIDEO","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R15_MEDIA_AUDIO","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string},
-{"ruleId":"R16_MEDIA_PRESENTACION","ok":boolean,"subScore":number,"note":string,"evidence":object,"suggestions":string}
-],
+"findings": {
+"R1_HOOK": { ok, subScore, note, evidence, suggestions },
+"R2_OBJETIVOS": { ok, subScore, note, evidence, suggestions },
+...
+"R16_MEDIA_PRESENTACION": { ok, subScore, note, evidence, suggestions }
+},
 "suggestions": string[],
 "unknownRules": string[],
 "assetsDetected": {
@@ -307,7 +303,6 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
 }
 `
 
-
           }
         ]
       }
@@ -329,6 +324,124 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
   return JSON.parse(txt);
 }
 
+// ====== Vimeo Upload Functions ======
+
+/**
+ * Sube un video a Vimeo usando la API tus (resumable upload)
+ * @param {Buffer} buffer - Buffer del archivo de video
+ * @param {string} fileName - Nombre del archivo
+ * @param {string} videoTitle - Título del video en Vimeo
+ * @param {string} videoDescription - Descripción del video
+ * @returns {Promise<string>} - URL del video en Vimeo
+ */
+async function uploadToVimeo(buffer, fileName, videoTitle, videoDescription) {
+  if (!VIMEO_ACCESS_TOKEN) {
+    throw new Error('VIMEO_ACCESS_TOKEN no configurado');
+  }
+
+  try {
+    console.log('[Vimeo] Iniciando subida de video...');
+
+    // 1. Crear el video en Vimeo y obtener el upload link
+    const createResponse = await axios.post(
+      'https://api.vimeo.com/me/videos',
+      {
+        upload: {
+          approach: 'tus',
+          size: buffer.length
+        },
+        name: videoTitle,
+        description: videoDescription,
+        privacy: {
+          view: 'unlisted' // Puedes cambiarlo a 'anybody', 'nobody', 'password', etc.
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${VIMEO_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.vimeo.*+json;version=3.4'
+        }
+      }
+    );
+
+    const uploadLink = createResponse.data.upload.upload_link;
+    const videoUri = createResponse.data.uri; // Ej: /videos/123456789
+    const videoId = videoUri.split('/').pop();
+
+    console.log('[Vimeo] Video creado, ID:', videoId);
+
+    // 2. Subir el archivo usando TUS protocol
+    const uploadResponse = await axios.patch(
+      uploadLink,
+      buffer,
+      {
+        headers: {
+          'Tus-Resumable': '1.0.0',
+          'Upload-Offset': '0',
+          'Content-Type': 'application/offset+octet-stream',
+          'Accept': 'application/vnd.vimeo.*+json;version=3.4'
+        },
+        maxBodyLength: Infinity,
+        timeout: 15 * 60_000 // 15 minutos timeout para la subida
+      }
+    );
+
+    console.log('[Vimeo] Video subido exitosamente');
+
+    // 3. Esperar a que Vimeo procese el video
+    const vimeoUrl = await waitForVimeoProcessing(videoId);
+
+    return vimeoUrl;
+
+  } catch (error) {
+    console.error('[Vimeo] Error en la subida:', error.response?.data || error.message);
+    throw new Error(`Error al subir a Vimeo: ${error.response?.data?.error || error.message}`);
+  }
+}
+
+/**
+ * Espera a que Vimeo termine de procesar el video
+ * @param {string} videoId - ID del video en Vimeo
+ * @returns {Promise<string>} - URL del video procesado
+ */
+async function waitForVimeoProcessing(videoId, maxAttempts = 30) {
+  console.log('[Vimeo] Esperando procesamiento del video...');
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await axios.get(
+        `https://api.vimeo.com/videos/${videoId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${VIMEO_ACCESS_TOKEN}`,
+            'Accept': 'application/vnd.vimeo.*+json;version=3.4'
+          }
+        }
+      );
+
+      const status = response.data.status;
+      const link = response.data.link;
+
+      console.log(`[Vimeo] Estado del video: ${status} (intento ${attempt + 1}/${maxAttempts})`);
+
+      if (status === 'available') {
+        console.log('[Vimeo] Video disponible:', link);
+        return link;
+      }
+
+      // Esperar 10 segundos antes del siguiente intento
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+    } catch (error) {
+      console.error('[Vimeo] Error al verificar estado:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  throw new Error('Timeout esperando que Vimeo procese el video');
+}
+
 // ====== Endpoint principal ======
 app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
   const { file } = req;
@@ -346,6 +459,8 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
   }, { merge: true });
 
   let uploaded = null;
+  let videoBuffer = file.buffer; // Guardar el buffer para subir a Vimeo si es necesario
+
   try {
     // 1) Subir a Gemini Files
     uploaded = await uploadToGemini(file.buffer, file.mimetype, file.originalname);
@@ -366,14 +481,63 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
       mimeType: file.mimetype 
     });
 
-    // 5) Guardar resultado
+    // 5) Verificar si el score es >= 80%
+    const score = result.score || 0;
+    let vimeoUrl = null;
+
+    if (score >= 80) {
+      console.log(`[Análisis] Score ${score}% >= 80% - Iniciando subida a Vimeo...`);
+      
+      // Actualizar estado en Firestore
+      await ref.set({
+        status: 'uploading_to_vimeo',
+        result,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      try {
+        // Subir a Vimeo
+        const videoTitle = `Clase UDEL - ${file.originalname}`;
+        const videoDescription = `Video de clase aprobado con ${score}% de puntuación.\n\n${result.summary || ''}`;
+        
+        vimeoUrl = await uploadToVimeo(
+          videoBuffer,
+          file.originalname,
+          videoTitle,
+          videoDescription
+        );
+
+        console.log('[Vimeo] URL del video:', vimeoUrl);
+
+      } catch (vimeoError) {
+        console.error('[Vimeo] Error al subir:', vimeoError.message);
+        // No fallar el análisis completo, solo registrar el error
+        await ref.set({
+          vimeoError: vimeoError.message,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    } else {
+      console.log(`[Análisis] Score ${score}% < 80% - No se subirá a Vimeo`);
+    }
+
+    // 6) Guardar resultado final
     await ref.set({
       status: 'done',
       result,
+      vimeoUrl,
+      vimeoEligible: score >= 80,
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
 
-    return res.json({ ok: true, analysisId });
+    return res.json({ 
+      ok: true, 
+      analysisId,
+      score,
+      vimeoUrl,
+      vimeoEligible: score >= 80
+    });
+
   } catch (e) {
     console.error('analyzeVideo error:', e?.response?.status, e?.response?.data || String(e));
 
@@ -385,7 +549,7 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
 
     return res.status(500).json({ ok: false, error: e?.message || 'Internal error' });
   } finally {
-    // 6) Limpieza
+    // 7) Limpieza de Gemini
     const toDelete = extractGeminiFileRef(uploaded);
     if (toDelete) deleteGeminiFile(toDelete).catch(() => {});
   }
@@ -395,7 +559,13 @@ app.post('/analyzeVideo', upload.single('file'), async (req, res) => {
 app.get('/health', async (_req, res) => {
   try {
     await db.listCollections();
-    res.json({ ok: true, projectId: admin.app().options.projectId, model: GEMINI_MODEL });
+    const vimeoConfigured = !!VIMEO_ACCESS_TOKEN;
+    res.json({ 
+      ok: true, 
+      projectId: admin.app().options.projectId, 
+      model: GEMINI_MODEL,
+      vimeoConfigured
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
@@ -403,4 +573,7 @@ app.get('/health', async (_req, res) => {
 
 // ====== Inicio ======
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log('Analyzer listening on', PORT));
+app.listen(PORT, () => {
+  console.log('Analyzer listening on', PORT);
+  console.log('Vimeo integration:', VIMEO_ACCESS_TOKEN ? '✅ Enabled' : '❌ Disabled (set VIMEO_ACCESS_TOKEN)');
+});
