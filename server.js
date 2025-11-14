@@ -339,18 +339,64 @@ async function uploadToVimeoAPI(buffer, fileName, metadata = {}) {
 
   console.log('[Vimeo] Iniciando subida de video...');
 
-  // Generar un título más atractivo
-  const videoTitle = metadata.name || `UDEL - ${fileName}`;
-  
-  // Generar una descripción más detallada y atractiva
-  let videoDescription = '';
-  if (metadata.score) {
-    videoDescription += `🎓 Video educativo evaluado con ${metadata.score}% de calidad\n\n`;
-  }
+  // Generar un título atractivo basado en el contenido
+  let videoTitle = '';
   if (metadata.summary) {
-    videoDescription += `📝 Resumen: ${metadata.summary}\n\n`;
+    // Extraer un título del resumen
+    const summaryText = metadata.summary;
+    // Buscar la primera oración completa o usar las primeras palabras
+    const firstSentence = summaryText.split(/[.!?]/).filter(s => s.trim().length > 0)[0] || '';
+    
+    if (firstSentence.length > 10) {
+      // Si la primera oración es larga, usarla como base para el título
+      // Limitar a 50 caracteres y añadir puntos suspensivos si es necesario
+      videoTitle = firstSentence.trim().substring(0, 50);
+      if (firstSentence.length > 50) videoTitle += '...';
+    }
   }
-  videoDescription += '🔍 Este video ha sido analizado por la plataforma UDEL para garantizar su calidad educativa.';
+  
+  // Si no se pudo generar un título del resumen, usar un título genérico pero sin mencionar UDEL
+  if (!videoTitle) {
+    // Quitar la extensión del archivo
+    const baseFileName = fileName.replace(/\.[^/.]+$/, "");
+    // Convertir guiones bajos y guiones en espacios
+    const cleanName = baseFileName.replace(/[_-]/g, ' ');
+    // Capitalizar cada palabra
+    const capitalizedName = cleanName.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    
+    videoTitle = `Tutorial: ${capitalizedName}`;
+  }
+  
+  // Generar una descripción atractiva
+  let videoDescription = '';
+  
+  // Usar el resumen como base para la descripción
+  if (metadata.summary) {
+    videoDescription = metadata.summary;
+    
+    // Añadir algunos emojis y formato para hacerlo más atractivo
+    videoDescription = `📚 ${videoDescription}\n\n`;
+  }
+  
+  // Añadir información sobre los hallazgos si están disponibles
+  if (metadata.findings && metadata.findings.length > 0) {
+    videoDescription += '✅ Puntos destacados:\n';
+    
+    // Filtrar solo los hallazgos positivos (ok: true)
+    const positiveFindings = metadata.findings.filter(f => f.ok);
+    
+    // Añadir hasta 3 hallazgos positivos
+    positiveFindings.slice(0, 3).forEach(finding => {
+      videoDescription += `• ${finding.note || finding.ruleId.replace(/_/g, ' ')}\n`;
+    });
+    
+    videoDescription += '\n';
+  }
+  
+  // Añadir un llamado a la acción al final
+  videoDescription += '👉 ¡No olvides suscribirte para más contenido educativo de calidad!';
 
   // 1. Crear el video en Vimeo con título y descripción mejorados
   const createResponse = await axios.post(
@@ -530,9 +576,8 @@ app.post('/uploadToVimeo', upload.single('file'), async (req, res) => {
 
     // 3) Subir a Vimeo con información mejorada
     const vimeoResult = await uploadToVimeoAPI(file.buffer, file.originalname, {
-      name: `UDEL - ${file.originalname.replace(/\.[^/.]+$/, "")}`, // Quitar extensión del archivo
       summary: data.result?.summary || '',
-      score: data.result?.score,
+      findings: data.result?.findings || [],
       privacy: 'unlisted'
     });
 
