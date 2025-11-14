@@ -1,5 +1,4 @@
 // server.js - Analyzer API (Render)
-
 // ====== Dependencias ======
 import express from 'express';
 import cors from 'cors';
@@ -17,7 +16,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
 const GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
 const VIMEO_ACCESS_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
-const SCORE_THRESHOLD = 10; // Umbral para permitir subida a Vimeo
+const SCORE_THRESHOLD = 10; // Umbral para permitir subida a Vimeo (10% para pruebas)
 
 if (!GEMINI_API_KEY) throw new Error('Falta GEMINI_API_KEY');
 
@@ -340,7 +339,20 @@ async function uploadToVimeoAPI(buffer, fileName, metadata = {}) {
 
   console.log('[Vimeo] Iniciando subida de video...');
 
-  // 1. Crear el video en Vimeo
+  // Generar un título más atractivo
+  const videoTitle = metadata.name || `UDEL - ${fileName}`;
+  
+  // Generar una descripción más detallada y atractiva
+  let videoDescription = '';
+  if (metadata.score) {
+    videoDescription += `🎓 Video educativo evaluado con ${metadata.score}% de calidad\n\n`;
+  }
+  if (metadata.summary) {
+    videoDescription += `📝 Resumen: ${metadata.summary}\n\n`;
+  }
+  videoDescription += '🔍 Este video ha sido analizado por la plataforma UDEL para garantizar su calidad educativa.';
+
+  // 1. Crear el video en Vimeo con título y descripción mejorados
   const createResponse = await axios.post(
     'https://api.vimeo.com/me/videos',
     {
@@ -348,8 +360,8 @@ async function uploadToVimeoAPI(buffer, fileName, metadata = {}) {
         approach: 'tus',
         size: buffer.length
       },
-      name: metadata.name || fileName,
-      description: metadata.description || '',
+      name: videoTitle,
+      description: videoDescription,
       privacy: {
         view: metadata.privacy || 'unlisted' // 'anybody', 'unlisted', 'password', 'disable'
       }
@@ -378,9 +390,19 @@ async function uploadToVimeoAPI(buffer, fileName, metadata = {}) {
 
   console.log('[Vimeo] Video subido exitosamente:', videoUri);
 
-  // 3. Obtener el link del video
+  // 3. Obtener los detalles completos del video para conseguir la URL correcta con hash
+  const videoDetails = await axios.get(`https://api.vimeo.com${videoUri}`, {
+    headers: {
+      'Authorization': `Bearer ${VIMEO_ACCESS_TOKEN}`,
+      'Accept': 'application/vnd.vimeo.*+json;version=3.4'
+    }
+  });
+
+  // Usar la URL completa de la respuesta de la API en lugar de construirla manualmente
+  const videoLink = videoDetails.data.link || videoDetails.data.player_embed_url;
   const videoId = videoUri.split('/').pop();
-  const videoLink = `https://vimeo.com/${videoId}`;
+
+  console.log('[Vimeo] URL completa del video:', videoLink);
 
   return {
     uri: videoUri,
@@ -506,10 +528,11 @@ app.post('/uploadToVimeo', upload.single('file'), async (req, res) => {
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    // 3) Subir a Vimeo
+    // 3) Subir a Vimeo con información mejorada
     const vimeoResult = await uploadToVimeoAPI(file.buffer, file.originalname, {
-      name: `UDEL - ${file.originalname}`,
-      description: `Análisis: Score ${data.result?.score}%\n\n${data.result?.summary || ''}`,
+      name: `UDEL - ${file.originalname.replace(/\.[^/.]+$/, "")}`, // Quitar extensión del archivo
+      summary: data.result?.summary || '',
+      score: data.result?.score,
       privacy: 'unlisted'
     });
 
