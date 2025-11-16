@@ -615,13 +615,199 @@ app.post('/uploadToVimeo', upload.single('file'), async (req, res) => {
   }
 });
 
+// ====== Generar Carta Descriptiva ======
+app.post('/generateCartaDescriptiva', async (req, res) => {
+  const { temaDescription } = req.body || {};
+
+  if (!temaDescription || typeof temaDescription !== 'string' || temaDescription.trim().length < 10) {
+    return res.status(400).json({ ok: false, error: 'Se requiere una descripción del tema (mínimo 10 caracteres)' });
+  }
+
+  try {
+    // 1) Generar la carta usando Gemini
+    const cartaGenerada = await generateCartaWithGemini(temaDescription.trim());
+
+    // 2) Analizar la carta generada para asegurar 100%
+    const analysis = await analyzeCartaWithGemini(cartaGenerada);
+
+    // 3) Verificar que obtenga 100%
+    if (analysis.score < 100) {
+      console.warn('La carta generada no obtuvo 100%, regenerando...');
+      // Intentar regenerar una vez más
+      const cartaRegenerada = await generateCartaWithGemini(temaDescription.trim(), analysis.suggestions);
+      const analysisRegenerado = await analyzeCartaWithGemini(cartaRegenerada);
+
+      if (analysisRegenerado.score >= 100) {
+        return res.json({
+          ok: true,
+          carta: { contenido: cartaRegenerada },
+          analysis: analysisRegenerado
+        });
+      } else {
+        // Si aún no llega a 100, devolver la mejor versión
+        return res.json({
+          ok: true,
+          carta: { contenido: analysisRegenerado.score > analysis.score ? cartaRegenerada : cartaGenerada },
+          analysis: analysisRegenerado.score > analysis.score ? analysisRegenerado : analysis
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      carta: { contenido: cartaGenerada },
+      analysis
+    });
+
+  } catch (e) {
+    console.error('Error generando carta descriptiva:', e);
+    return res.status(500).json({ ok: false, error: e.message || 'Error interno del servidor' });
+  }
+});
+
+// Función para generar carta descriptiva con Gemini
+async function generateCartaWithGemini(temaDescription, suggestionsPrevias = []) {
+  const MODEL = GEMINI_MODEL;
+  const suggestionsText = suggestionsPrevias.length > 0 ?
+    `\n\nMejoras de versiones anteriores a considerar:\n${suggestionsPrevias.map(s => `- ${s}`).join('\n')}` : '';
+
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: `Genera una carta descriptiva completa para una clase universitaria basada en la siguiente descripción del tema:
+
+DESCRIPCIÓN DEL TEMA:
+${temaDescription}
+
+${suggestionsText}
+
+INSTRUCCIONES PARA LA CARTA DESCRIPTIVA:
+- Debe ser completa y profesional
+- Incluir todos los elementos pedagógicos necesarios
+- Seguir las mejores prácticas de diseño instruccional
+- Asegurar que cumpla con TODOS los criterios de evaluación para obtener 100%
+- Lenguaje claro, accesible y motivador
+- Estructura lógica y organizada
+
+ELEMENTOS REQUERIDOS:
+1. Título atractivo y descriptivo
+2. Descripción general del curso
+3. Objetivos de aprendizaje específicos y medibles
+4. Contenido temático detallado
+5. Metodología y actividades
+6. Recursos necesarios
+7. Sistema de evaluación
+8. Criterios de evaluación claros
+9. Bibliografía y referencias
+
+IMPORTANTE: La carta debe estar optimizada para obtener la máxima puntuación en análisis pedagógico. Incluye todos los elementos que demuestren calidad educativa excepcional.
+
+Responde SOLO con el texto completo de la carta descriptiva, sin explicaciones adicionales.`
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.3,
+      maxOutputTokens: 4000
+    }
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const response = await axios.post(url, body, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 60_000
+  });
+
+  const txt = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return txt.trim();
+}
+
+// Función para analizar carta descriptiva con Gemini
+async function analyzeCartaWithGemini(cartaContenido) {
+  const MODEL = GEMINI_MODEL;
+
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: `Evalúa la siguiente carta descriptiva de curso y asigna una puntuación basada en criterios pedagógicos de calidad. La carta debe obtener 100% si cumple perfectamente con todos los estándares.
+
+CARTA DESCRIPTIVA A EVALUAR:
+${cartaContenido}
+
+CRITERIOS DE EVALUACIÓN (cada uno con peso y reglas específicas):
+
+C1_ESTRUCTURA_COMPLETA (peso 10): Tiene título, descripción, objetivos, contenido, metodología, evaluación, bibliografía. Puntuación: 100 si todos presentes, 0 si falta alguno crítico.
+
+C2_OBJETIVOS_CLAROS (peso 15): Objetivos específicos, medibles, alcanzables, relevantes, temporales. Deben usar verbos de acción. Puntuación basada en claridad y completitud.
+
+C3_CONTENIDO_ORGANIZADO (peso 15): Contenido lógico, secuencial, con temas interconectados. Incluye prerrequisitos y progresión.
+
+C4_METODOLOGIA_APROPIADA (peso 15): Actividades variadas, prácticas, evaluación formativa. Incluye tiempo estimado y recursos.
+
+C5_EVALUACION_COMPLETA (peso 15): Múltiples formas de evaluación, criterios claros, rúbrica implícita, retroalimentación.
+
+C6_RECURSOS_ACCESIBLES (peso 10): Lista completa de recursos, materiales, tecnología. Considera accesibilidad.
+
+C7_LENGUAJE_CLARO (peso 10): Lenguaje inclusivo, términos definidos, estructura clara, motivador.
+
+C8_INNOVACION_PEDAGOGICA (peso 5): Elementos innovadores, tecnología educativa, aprendizaje activo.
+
+C9_BIBLIOGRAFIA_COMPLETA (peso 3): Referencias actualizadas, variadas, relevantes.
+
+C10_PRESENTACION_PROFESIONAL (peso 2): Formato profesional, sin errores, atractiva.
+
+CÁLCULO: Score final = promedio ponderado. Penalización: -10 puntos si faltan elementos críticos.
+
+DETALLES POR CRITERIO:
+• ok: boolean (cumple perfectamente)
+• subScore: 0-100
+• note: explicación breve y constructiva
+• suggestions: mejoras específicas si no cumple
+
+SALIDA JSON EXACTA:
+{
+"score": number,
+"findings": [
+{"ruleId":"C1_ESTRUCTURA_COMPLETA","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+... (todos los criterios C1-C10)
+],
+"suggestions": string[],
+"summary": string
+}`
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      response_mime_type: 'application/json'
+    }
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const response = await axios.post(url, body, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 60_000
+  });
+
+  const txt = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  return JSON.parse(txt);
+}
+
 // ====== Salud ======
 app.get('/health', async (_req, res) => {
   try {
     await db.listCollections();
-    res.json({ 
-      ok: true, 
-      projectId: admin.app().options.projectId, 
+    res.json({
+      ok: true,
+      projectId: admin.app().options.projectId,
       model: GEMINI_MODEL,
       vimeoConfigured: !!VIMEO_ACCESS_TOKEN,
       scoreThreshold: SCORE_THRESHOLD
