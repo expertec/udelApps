@@ -17,10 +17,37 @@ const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
 
 // Validar modelo - fallback a modelo válido si el configurado no existe
 let GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
-const VALID_MODELS = ['models/gemini-1.5-pro', 'models/gemini-1.5-flash', 'models/gemini-1.5-pro-002'];
+const VALID_MODELS = ['models/gemini-1.5-flash', 'models/gemini-1.5-pro-002'];
 if (!VALID_MODELS.includes(GEMINI_MODEL)) {
   console.warn(`Modelo Gemini inválido: ${GEMINI_MODEL}. Usando fallback: models/gemini-1.5-pro-002`);
   GEMINI_MODEL = 'models/gemini-1.5-pro-002';
+}
+
+// Función auxiliar para intentar con modelos alternativos
+async function retryWithModels(operation, initialModel) {
+  const models = VALID_MODELS.filter(m => m !== initialModel);
+  let lastError = null;
+
+  // Primer intento con el modelo inicial
+  try {
+    return await operation(initialModel);
+  } catch (e) {
+    console.warn(`Error con modelo ${initialModel}:`, e.message);
+    lastError = e;
+  }
+
+  // Intentar con modelos alternativos
+  for (const model of models) {
+    try {
+      console.log(`Reintentando con modelo alternativo: ${model}`);
+      return await operation(model);
+    } catch (e) {
+      console.warn(`Error con modelo ${model}:`, e.message);
+      lastError = e;
+    }
+  }
+
+  throw lastError || new Error('Todos los modelos fallaron');
 }
 const VIMEO_ACCESS_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
 const SCORE_THRESHOLD = 10; // Umbral para permitir subida a Vimeo (10% para pruebas)
@@ -115,7 +142,7 @@ async function deleteGeminiFile(fileNameOrUri) {
 
 // ====== Gemini: generateContent (v1beta, snake_case para archivos) ======
 async function geminiAnalyze({ fileUri, mimeType }) {
-  const MODEL = GEMINI_MODEL;
+  return retryWithModels(async (MODEL) => {
   const body = {
     contents: [
       {
@@ -336,6 +363,7 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
 
   const txt = res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
   return JSON.parse(txt);
+  }, GEMINI_MODEL);
 }
 
 // ====== Vimeo Upload Helper ======
@@ -624,27 +652,36 @@ app.post('/uploadToVimeo', upload.single('file'), async (req, res) => {
 
 // ====== Generar Carta Descriptiva ======
 app.post('/generateCartaDescriptiva', async (req, res) => {
+  console.log('[generateCartaDescriptiva] Inicio - Body:', JSON.stringify(req.body));
   const { temaDescription } = req.body || {};
 
   if (!temaDescription || typeof temaDescription !== 'string' || temaDescription.trim().length < 10) {
+    console.log('[generateCartaDescriptiva] Validación fallida - temaDescription:', temaDescription);
     return res.status(400).json({ ok: false, error: 'Se requiere una descripción del tema (mínimo 10 caracteres)' });
   }
 
   try {
+    console.log('[generateCartaDescriptiva] Generando carta inicial...');
     // 1) Generar la carta usando Gemini
     const cartaGenerada = await generateCartaWithGemini(temaDescription.trim());
+    console.log('[generateCartaDescriptiva] Carta generada, longitud:', cartaGenerada.length);
 
+    console.log('[generateCartaDescriptiva] Analizando carta...');
     // 2) Analizar la carta generada para asegurar 100%
     const analysis = await analyzeCartaWithGemini(cartaGenerada);
+    console.log('[generateCartaDescriptiva] Análisis completado, score:', analysis.score);
 
     // 3) Verificar que obtenga 100%
     if (analysis.score < 100) {
-      console.warn('La carta generada no obtuvo 100%, regenerando...');
+      console.warn('[generateCartaDescriptiva] Score < 100, regenerando...');
       // Intentar regenerar una vez más
       const cartaRegenerada = await generateCartaWithGemini(temaDescription.trim(), analysis.suggestions);
+      console.log('[generateCartaDescriptiva] Carta regenerada, longitud:', cartaRegenerada.length);
       const analysisRegenerado = await analyzeCartaWithGemini(cartaRegenerada);
+      console.log('[generateCartaDescriptiva] Análisis regenerado, score:', analysisRegenerado.score);
 
       if (analysisRegenerado.score >= 100) {
+        console.log('[generateCartaDescriptiva] Regeneración exitosa, devolviendo...');
         return res.json({
           ok: true,
           carta: { contenido: cartaRegenerada },
@@ -652,6 +689,7 @@ app.post('/generateCartaDescriptiva', async (req, res) => {
         });
       } else {
         // Si aún no llega a 100, devolver la mejor versión
+        console.log('[generateCartaDescriptiva] Regeneración no alcanzó 100, devolviendo mejor versión...');
         return res.json({
           ok: true,
           carta: { contenido: analysisRegenerado.score > analysis.score ? cartaRegenerada : cartaGenerada },
@@ -660,6 +698,7 @@ app.post('/generateCartaDescriptiva', async (req, res) => {
       }
     }
 
+    console.log('[generateCartaDescriptiva] Score >= 100, devolviendo carta inicial...');
     return res.json({
       ok: true,
       carta: { contenido: cartaGenerada },
@@ -667,14 +706,18 @@ app.post('/generateCartaDescriptiva', async (req, res) => {
     });
 
   } catch (e) {
-    console.error('Error generando carta descriptiva:', e);
+    console.error('[generateCartaDescriptiva] Error:', e?.message, e?.stack);
+    if (e?.response) {
+      console.error('[generateCartaDescriptiva] Response error:', e.response.status, e.response.data);
+    }
     return res.status(500).json({ ok: false, error: e.message || 'Error interno del servidor' });
   }
 });
 
 // Función para generar carta descriptiva con Gemini
 async function generateCartaWithGemini(temaDescription, suggestionsPrevias = []) {
-  const MODEL = GEMINI_MODEL;
+  console.log('[generateCartaWithGemini] Inicio - temaDescription length:', temaDescription.length, 'suggestions:', suggestionsPrevias.length);
+  return retryWithModels(async (MODEL) => {
   const suggestionsText = suggestionsPrevias.length > 0 ?
     `\n\nMejoras de versiones anteriores a considerar:\n${suggestionsPrevias.map(s => `- ${s}`).join('\n')}` : '';
 
@@ -723,19 +766,24 @@ Responde SOLO con el texto completo de la carta descriptiva, sin explicaciones a
     }
   };
 
+  console.log('[generateCartaWithGemini] Llamando a Gemini API con modelo:', MODEL);
   const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const response = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
-    timeout: 60_000
+    timeout: 120_000
   });
 
+  console.log('[generateCartaWithGemini] Respuesta recibida, status:', response.status);
   const txt = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  console.log('[generateCartaWithGemini] Texto extraído, length:', txt.length);
   return txt.trim();
+  }, GEMINI_MODEL);
 }
 
 // Función para analizar carta descriptiva con Gemini
 async function analyzeCartaWithGemini(cartaContenido) {
-  const MODEL = GEMINI_MODEL;
+  console.log('[analyzeCartaWithGemini] Inicio - cartaContenido length:', cartaContenido.length);
+  return retryWithModels(async (MODEL) => {
 
   const body = {
     contents: [
@@ -798,14 +846,26 @@ SALIDA JSON EXACTA:
     }
   };
 
+  console.log('[analyzeCartaWithGemini] Llamando a Gemini API con modelo:', MODEL);
   const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const response = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
-    timeout: 60_000
+    timeout: 120_000
   });
 
+  console.log('[analyzeCartaWithGemini] Respuesta recibida, status:', response.status);
   const txt = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  return JSON.parse(txt);
+  console.log('[analyzeCartaWithGemini] Texto JSON recibido, length:', txt.length);
+
+  try {
+    const parsed = JSON.parse(txt);
+    console.log('[analyzeCartaWithGemini] JSON parseado exitosamente, score:', parsed.score);
+    return parsed;
+  } catch (parseError) {
+    console.error('[analyzeCartaWithGemini] Error parseando JSON:', parseError.message, 'Texto recibido:', txt.substring(0, 500));
+    throw new Error(`Error parseando respuesta de Gemini: ${parseError.message}`);
+  }
+  }, GEMINI_MODEL);
 }
 
 // ====== Salud ======
