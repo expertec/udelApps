@@ -14,7 +14,14 @@ app.use(express.json());
 // ====== Entorno ======
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
-const GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
+
+// Validar modelo - fallback a modelo válido si el configurado no existe
+let GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
+const VALID_MODELS = ['models/gemini-1.5-pro', 'models/gemini-1.5-flash', 'models/gemini-1.5-pro-002'];
+if (!VALID_MODELS.includes(GEMINI_MODEL)) {
+  console.warn(`Modelo Gemini inválido: ${GEMINI_MODEL}. Usando fallback: models/gemini-1.5-pro-002`);
+  GEMINI_MODEL = 'models/gemini-1.5-pro-002';
+}
 const VIMEO_ACCESS_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
 const SCORE_THRESHOLD = 10; // Umbral para permitir subida a Vimeo (10% para pruebas)
 
