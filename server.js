@@ -13,14 +13,14 @@ app.use(express.json());
 
 // ====== Entorno ======
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-1.5-pro-002';
+const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-pro-vision';
 
 // Validar modelo - fallback a modelo válido si el configurado no existe
 let GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
-const VALID_MODELS = ['models/gemini-1.5-flash', 'models/gemini-1.5-pro-002'];
+const VALID_MODELS = ['models/gemini-pro-vision', 'models/gemini-1.0-pro-vision-latest'];
 if (!VALID_MODELS.includes(GEMINI_MODEL)) {
-  console.warn(`Modelo Gemini inválido: ${GEMINI_MODEL}. Usando fallback: models/gemini-1.5-pro-002`);
-  GEMINI_MODEL = 'models/gemini-1.5-pro-002';
+  console.warn(`Modelo Gemini inválido: ${GEMINI_MODEL}. Usando fallback: models/gemini-pro-vision`);
+  GEMINI_MODEL = 'models/gemini-pro-vision';
 }
 
 // Función auxiliar para intentar con modelos alternativos
