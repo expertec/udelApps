@@ -13,36 +13,37 @@ app.use(express.json());
 
 // ====== Entorno ======
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const RAW_MODEL = process.env.GEMINI_MODEL || 'models/gemini-pro-vision';
 
-// Validar modelo - fallback a modelo válido si el configurado no existe
-let GEMINI_MODEL = RAW_MODEL.startsWith('models/') ? RAW_MODEL : `models/${RAW_MODEL}`;
-const VALID_MODELS = ['models/gemini-pro-vision', 'models/gemini-1.0-pro-vision-latest'];
-if (!VALID_MODELS.includes(GEMINI_MODEL)) {
-  console.warn(`Modelo Gemini inválido: ${GEMINI_MODEL}. Usando fallback: models/gemini-pro-vision`);
-  GEMINI_MODEL = 'models/gemini-pro-vision';
-}
+// Modelos específicos para cada tarea
+const VIDEO_MODEL = 'models/gemini-1.5-pro-latest'; // Modelo con soporte de video
+const TEXT_MODEL = 'models/gemini-1.5-pro-latest';  // Modelo para texto
+const VALID_VIDEO_MODELS = ['models/gemini-1.5-pro-latest', 'models/gemini-1.5-pro', 'models/gemini-1.5-flash-latest'];
+const VALID_TEXT_MODELS = ['models/gemini-1.5-pro-latest', 'models/gemini-1.5-pro', 'models/gemini-pro'];
+
+console.log(`🎬 Modelo de video: ${VIDEO_MODEL}`);
+console.log(`📝 Modelo de texto: ${TEXT_MODEL}`);
 
 // Función auxiliar para intentar con modelos alternativos
-async function retryWithModels(operation, initialModel) {
-  const models = VALID_MODELS.filter(m => m !== initialModel);
+async function retryWithModels(operation, initialModel, validModels) {
+  const models = validModels.filter(m => m !== initialModel);
   let lastError = null;
 
   // Primer intento con el modelo inicial
   try {
+    console.log(`🔄 Intentando con modelo: ${initialModel}`);
     return await operation(initialModel);
   } catch (e) {
-    console.warn(`Error con modelo ${initialModel}:`, e.message);
+    console.warn(`⚠️ Error con modelo ${initialModel}:`, e.message);
     lastError = e;
   }
 
   // Intentar con modelos alternativos
   for (const model of models) {
     try {
-      console.log(`Reintentando con modelo alternativo: ${model}`);
+      console.log(`🔄 Reintentando con modelo alternativo: ${model}`);
       return await operation(model);
     } catch (e) {
-      console.warn(`Error con modelo ${model}:`, e.message);
+      console.warn(`⚠️ Error con modelo ${model}:`, e.message);
       lastError = e;
     }
   }
@@ -142,6 +143,7 @@ async function deleteGeminiFile(fileNameOrUri) {
 
 // ====== Gemini: generateContent (v1beta, snake_case para archivos) ======
 async function geminiAnalyze({ fileUri, mimeType }) {
+  console.log(`📹 Iniciando análisis de video con URI: ${fileUri}`);
   return retryWithModels(async (MODEL) => {
   const body = {
     contents: [
@@ -362,8 +364,16 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
   });
 
   const txt = res?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  return JSON.parse(txt);
-  }, GEMINI_MODEL);
+  console.log(`✅ Respuesta recibida del modelo ${MODEL}, parseando JSON...`);
+  
+  try {
+    return JSON.parse(txt);
+  } catch (parseError) {
+    console.error('❌ Error parseando JSON de análisis de video:', parseError.message);
+    console.error('Texto recibido:', txt.substring(0, 500));
+    throw new Error(`Error parseando respuesta de Gemini: ${parseError.message}`);
+  }
+  }, VIDEO_MODEL, VALID_VIDEO_MODELS);
 }
 
 // ====== Vimeo Upload Helper ======
@@ -776,8 +786,13 @@ Responde SOLO con el texto completo de la carta descriptiva, sin explicaciones a
   console.log('[generateCartaWithGemini] Respuesta recibida, status:', response.status);
   const txt = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   console.log('[generateCartaWithGemini] Texto extraído, length:', txt.length);
+  
+  if (!txt || txt.length < 100) {
+    throw new Error('La respuesta de Gemini está vacía o es muy corta');
+  }
+  
   return txt.trim();
-  }, GEMINI_MODEL);
+  }, TEXT_MODEL, VALID_TEXT_MODELS);
 }
 
 // Función para analizar carta descriptiva con Gemini
@@ -865,7 +880,7 @@ SALIDA JSON EXACTA:
     console.error('[analyzeCartaWithGemini] Error parseando JSON:', parseError.message, 'Texto recibido:', txt.substring(0, 500));
     throw new Error(`Error parseando respuesta de Gemini: ${parseError.message}`);
   }
-  }, GEMINI_MODEL);
+  }, TEXT_MODEL, VALID_TEXT_MODELS);
 }
 
 // ====== Salud ======
@@ -875,7 +890,8 @@ app.get('/health', async (_req, res) => {
     res.json({
       ok: true,
       projectId: admin.app().options.projectId,
-      model: GEMINI_MODEL,
+      videoModel: VIDEO_MODEL,
+      textModel: TEXT_MODEL,
       vimeoConfigured: !!VIMEO_ACCESS_TOKEN,
       scoreThreshold: SCORE_THRESHOLD
     });
