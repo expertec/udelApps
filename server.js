@@ -687,7 +687,7 @@ app.post('/uploadToVimeo', upload.single('file'), async (req, res) => {
   }
 });
 
-// ====== Generar Carta Descriptiva ======
+// ====== Generar Carta Descriptiva (100% OpenAI) ======
 app.post('/generateCartaDescriptiva', async (req, res) => {
   console.log('[generateCartaDescriptiva] Inicio - Body:', JSON.stringify(req.body));
   const { temaDescription } = req.body || {};
@@ -697,73 +697,50 @@ app.post('/generateCartaDescriptiva', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Se requiere una descripción del tema (mínimo 10 caracteres)' });
   }
 
-  try {
-    console.log('[generateCartaDescriptiva] Generando carta inicial...');
-    
-    // 1) Intentar con OpenAI primero (más confiable)
-    let cartaGenerada;
-    let usedOpenAI = false;
-    
-    if (openai) {
-      try {
-        console.log('[generateCartaDescriptiva] Usando OpenAI...');
-        cartaGenerada = await generateCartaWithOpenAI(temaDescription.trim());
-        usedOpenAI = true;
-        console.log('[generateCartaDescriptiva] Carta generada con OpenAI, longitud:', cartaGenerada.length);
-      } catch (openaiError) {
-        console.warn('[generateCartaDescriptiva] Error con OpenAI, intentando con Gemini:', openaiError.message);
-        cartaGenerada = await generateCartaWithGemini(temaDescription.trim());
-        console.log('[generateCartaDescriptiva] Carta generada con Gemini, longitud:', cartaGenerada.length);
-      }
-    } else {
-      // Si no hay OpenAI configurado, usar Gemini directamente
-      cartaGenerada = await generateCartaWithGemini(temaDescription.trim());
-      console.log('[generateCartaDescriptiva] Carta generada con Gemini, longitud:', cartaGenerada.length);
-    }
+  // Verificar que OpenAI esté configurado
+  if (!openai) {
+    return res.status(503).json({
+      ok: false,
+      error: 'OpenAI no está configurado. Agrega OPENAI_API_KEY en las variables de entorno.'
+    });
+  }
 
-    console.log('[generateCartaDescriptiva] Analizando carta...');
-    // 2) Analizar la carta generada para asegurar 100%
-    const analysis = await analyzeCartaWithGemini(cartaGenerada);
+  try {
+    console.log('[generateCartaDescriptiva] Generando carta con OpenAI...');
+    
+    // 1) Generar la carta usando OpenAI
+    const cartaGenerada = await generateCartaWithOpenAI(temaDescription.trim());
+    console.log('[generateCartaDescriptiva] Carta generada, longitud:', cartaGenerada.length);
+
+    console.log('[generateCartaDescriptiva] Analizando carta con OpenAI...');
+    
+    // 2) Analizar la carta generada con OpenAI
+    const analysis = await analyzeCartaWithOpenAI(cartaGenerada);
     console.log('[generateCartaDescriptiva] Análisis completado, score:', analysis.score);
 
-    // 3) Verificar que obtenga 100%
+    // 3) Si no alcanza 100%, regenerar una vez
     if (analysis.score < 100) {
-      console.warn('[generateCartaDescriptiva] Score < 100, regenerando...');
-      // Intentar regenerar una vez más con el mismo método que funcionó
-      let cartaRegenerada;
-      if (usedOpenAI && openai) {
-        try {
-          cartaRegenerada = await generateCartaWithOpenAI(temaDescription.trim(), analysis.suggestions);
-        } catch (e) {
-          console.warn('[generateCartaDescriptiva] Error regenerando con OpenAI:', e.message);
-          cartaRegenerada = await generateCartaWithGemini(temaDescription.trim(), analysis.suggestions);
-        }
-      } else {
-        cartaRegenerada = await generateCartaWithGemini(temaDescription.trim(), analysis.suggestions);
-      }
+      console.warn('[generateCartaDescriptiva] Score < 100, regenerando con sugerencias...');
+      
+      const cartaRegenerada = await generateCartaWithOpenAI(temaDescription.trim(), analysis.suggestions);
       console.log('[generateCartaDescriptiva] Carta regenerada, longitud:', cartaRegenerada.length);
-      const analysisRegenerado = await analyzeCartaWithGemini(cartaRegenerada);
+      
+      const analysisRegenerado = await analyzeCartaWithOpenAI(cartaRegenerada);
       console.log('[generateCartaDescriptiva] Análisis regenerado, score:', analysisRegenerado.score);
 
-      if (analysisRegenerado.score >= 100) {
-        console.log('[generateCartaDescriptiva] Regeneración exitosa, devolviendo...');
-        return res.json({
-          ok: true,
-          carta: { contenido: cartaRegenerada },
-          analysis: analysisRegenerado
-        });
-      } else {
-        // Si aún no llega a 100, devolver la mejor versión
-        console.log('[generateCartaDescriptiva] Regeneración no alcanzó 100, devolviendo mejor versión...');
-        return res.json({
-          ok: true,
-          carta: { contenido: analysisRegenerado.score > analysis.score ? cartaRegenerada : cartaGenerada },
-          analysis: analysisRegenerado.score > analysis.score ? analysisRegenerado : analysis
-        });
-      }
+      // Devolver la mejor versión
+      const mejorCarta = analysisRegenerado.score > analysis.score ? cartaRegenerada : cartaGenerada;
+      const mejorAnalysis = analysisRegenerado.score > analysis.score ? analysisRegenerado : analysis;
+      
+      return res.json({
+        ok: true,
+        carta: { contenido: mejorCarta },
+        analysis: mejorAnalysis
+      });
     }
 
-    console.log('[generateCartaDescriptiva] Score >= 100, devolviendo carta inicial...');
+    // 4) Si ya tiene 100%, devolver directamente
+    console.log('[generateCartaDescriptiva] Score perfecto, devolviendo carta...');
     return res.json({
       ok: true,
       carta: { contenido: cartaGenerada },
@@ -919,7 +896,100 @@ Responde SOLO con el texto completo de la carta descriptiva, sin explicaciones a
   }, TEXT_MODEL, VALID_TEXT_MODELS);
 }
 
-// Función para analizar carta descriptiva con Gemini
+// Función para analizar carta descriptiva con OpenAI
+async function analyzeCartaWithOpenAI(cartaContenido) {
+  console.log('[analyzeCartaWithOpenAI] Inicio - cartaContenido length:', cartaContenido.length);
+  
+  if (!openai) {
+    throw new Error('OpenAI no está configurado');
+  }
+
+  const prompt = `Evalúa la siguiente carta descriptiva de curso y asigna una puntuación basada en criterios pedagógicos de calidad. La carta debe obtener 100% si cumple perfectamente con todos los estándares.
+
+CARTA DESCRIPTIVA A EVALUAR:
+${cartaContenido}
+
+CRITERIOS DE EVALUACIÓN (cada uno con peso y reglas específicas):
+
+C1_ESTRUCTURA_COMPLETA (peso 10): Tiene título, descripción, objetivos, contenido, metodología, evaluación, bibliografía. Puntuación: 100 si todos presentes, 0 si falta alguno crítico.
+
+C2_OBJETIVOS_CLAROS (peso 15): Objetivos específicos, medibles, alcanzables, relevantes, temporales. Deben usar verbos de acción. Puntuación basada en claridad y completitud.
+
+C3_CONTENIDO_ORGANIZADO (peso 15): Contenido lógico, secuencial, con temas interconectados. Incluye prerrequisitos y progresión.
+
+C4_METODOLOGIA_APROPIADA (peso 15): Actividades variadas, prácticas, evaluación formativa. Incluye tiempo estimado y recursos.
+
+C5_EVALUACION_COMPLETA (peso 15): Múltiples formas de evaluación, criterios claros, rúbrica implícita, retroalimentación.
+
+C6_RECURSOS_ACCESIBLES (peso 10): Lista completa de recursos, materiales, tecnología. Considera accesibilidad.
+
+C7_LENGUAJE_CLARO (peso 10): Lenguaje inclusivo, términos definidos, estructura clara, motivador.
+
+C8_INNOVACION_PEDAGOGICA (peso 5): Elementos innovadores, tecnología educativa, aprendizaje activo.
+
+C9_BIBLIOGRAFIA_COMPLETA (peso 3): Referencias actualizadas, variadas, relevantes.
+
+C10_PRESENTACION_PROFESIONAL (peso 2): Formato profesional, sin errores, atractiva.
+
+CÁLCULO: Score final = promedio ponderado. Penalización: -10 puntos si faltan elementos críticos.
+
+DETALLES POR CRITERIO:
+• ok: boolean (cumple perfectamente)
+• subScore: 0-100
+• note: explicación breve y constructiva
+• suggestions: mejoras específicas si no cumple
+
+Responde SOLO con un objeto JSON válido con este formato exacto:
+{
+"score": number,
+"findings": [
+{"ruleId":"C1_ESTRUCTURA_COMPLETA","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C2_OBJETIVOS_CLAROS","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C3_CONTENIDO_ORGANIZADO","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C4_METODOLOGIA_APROPIADA","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C5_EVALUACION_COMPLETA","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C6_RECURSOS_ACCESIBLES","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C7_LENGUAJE_CLARO","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C8_INNOVACION_PEDAGOGICA","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C9_BIBLIOGRAFIA_COMPLETA","ok":boolean,"subScore":number,"note":string,"suggestions":string},
+{"ruleId":"C10_PRESENTACION_PROFESIONAL","ok":boolean,"subScore":number,"note":string,"suggestions":string}
+],
+"suggestions": [string],
+"summary": string
+}`;
+
+  console.log('[analyzeCartaWithOpenAI] Llamando a OpenAI API...');
+  
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4-turbo-preview',
+    messages: [
+      {
+        role: 'system',
+        content: 'Eres un experto evaluador de diseño instruccional. Analizas cartas descriptivas y proporcionas evaluaciones precisas en formato JSON.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    temperature: 0.1,
+    response_format: { type: 'json_object' }
+  });
+
+  const txt = completion.choices[0]?.message?.content || '{}';
+  console.log('[analyzeCartaWithOpenAI] Texto JSON recibido, length:', txt.length);
+
+  try {
+    const parsed = JSON.parse(txt);
+    console.log('[analyzeCartaWithOpenAI] JSON parseado exitosamente, score:', parsed.score);
+    return parsed;
+  } catch (parseError) {
+    console.error('[analyzeCartaWithOpenAI] Error parseando JSON:', parseError.message, 'Texto recibido:', txt.substring(0, 500));
+    throw new Error(`Error parseando respuesta de OpenAI: ${parseError.message}`);
+  }
+}
+
+// Función para analizar carta descriptiva con Gemini (fallback - NO SE USA)
 async function analyzeCartaWithGemini(cartaContenido) {
   console.log('[analyzeCartaWithGemini] Inicio - cartaContenido length:', cartaContenido.length);
   return retryWithModels(async (MODEL) => {
@@ -1016,8 +1086,10 @@ app.get('/health', async (_req, res) => {
       projectId: admin.app().options.projectId,
       videoModel: VIDEO_MODEL,
       textModel: TEXT_MODEL,
+      openaiConfigured: !!OPENAI_API_KEY,
       vimeoConfigured: !!VIMEO_ACCESS_TOKEN,
-      scoreThreshold: SCORE_THRESHOLD
+      scoreThreshold: SCORE_THRESHOLD,
+      cartaDescriptivaEngine: openai ? 'OpenAI (GPT-4)' : 'Gemini (fallback)'
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
