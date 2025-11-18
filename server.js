@@ -14,11 +14,11 @@ app.use(express.json());
 // ====== Entorno ======
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Modelos específicos para cada tarea (nombres correctos para v1beta)
-const VIDEO_MODEL = 'models/gemini-1.5-pro'; // Modelo con soporte de video
-const TEXT_MODEL = 'models/gemini-1.5-pro';  // Modelo para texto
-const VALID_VIDEO_MODELS = ['models/gemini-1.5-pro', 'models/gemini-1.5-flash', 'models/gemini-1.0-pro-vision'];
-const VALID_TEXT_MODELS = ['models/gemini-1.5-pro', 'models/gemini-1.5-flash', 'models/gemini-pro'];
+// Modelos específicos para cada tarea (nombres exactos para v1beta con generateContent)
+const VIDEO_MODEL = 'gemini-1.5-pro'; // Modelo con soporte de video (sin prefijo models/)
+const TEXT_MODEL = 'gemini-1.5-pro';  // Modelo para texto
+const VALID_VIDEO_MODELS = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-pro-latest'];
+const VALID_TEXT_MODELS = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'];
 
 console.log(`🎬 Modelo de video: ${VIDEO_MODEL}`);
 console.log(`📝 Modelo de texto: ${TEXT_MODEL}`);
