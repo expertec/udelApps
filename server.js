@@ -14,14 +14,29 @@ app.use(express.json());
 // ====== Entorno ======
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Modelos específicos para cada tarea (nombres exactos para v1beta con generateContent)
-const VIDEO_MODEL = 'gemini-1.5-pro'; // Modelo con soporte de video (sin prefijo models/)
-const TEXT_MODEL = 'gemini-1.5-pro';  // Modelo para texto
-const VALID_VIDEO_MODELS = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-pro-latest'];
-const VALID_TEXT_MODELS = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'];
+// Modelos desde variables de entorno con fallbacks inteligentes
+const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || 'gemini-2.0-flash-exp';
+const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.0-flash-exp';
+
+// Modelos de fallback si el principal falla
+const VALID_VIDEO_MODELS = [
+  VIDEO_MODEL,
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash'
+].filter((v, i, a) => a.indexOf(v) === i); // Eliminar duplicados
+
+const VALID_TEXT_MODELS = [
+  TEXT_MODEL,
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash'
+].filter((v, i, a) => a.indexOf(v) === i); // Eliminar duplicados
 
 console.log(`🎬 Modelo de video: ${VIDEO_MODEL}`);
 console.log(`📝 Modelo de texto: ${TEXT_MODEL}`);
+console.log(`🔄 Fallbacks de video: ${VALID_VIDEO_MODELS.slice(1).join(', ')}`);
+console.log(`🔄 Fallbacks de texto: ${VALID_TEXT_MODELS.slice(1).join(', ')}`);
 
 // Función auxiliar para intentar con modelos alternativos
 async function retryWithModels(operation, initialModel, validModels) {
@@ -356,8 +371,9 @@ ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
     }
   };
 
-  // IMPORTANTE: Usar v1beta para soporte de archivos
-  const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  // IMPORTANTE: Usar v1beta para soporte de archivos con prefijo models/
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  console.log(`🔗 URL completa: ${url.replace(GEMINI_API_KEY, 'API_KEY_HIDDEN')}`);
   const res = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
     timeout: 8 * 60_000
@@ -777,7 +793,7 @@ Responde SOLO con el texto completo de la carta descriptiva, sin explicaciones a
   };
 
   console.log('[generateCartaWithGemini] Llamando a Gemini API con modelo:', MODEL);
-  const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const response = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
     timeout: 120_000
@@ -862,7 +878,7 @@ SALIDA JSON EXACTA:
   };
 
   console.log('[analyzeCartaWithGemini] Llamando a Gemini API con modelo:', MODEL);
-  const url = `https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const response = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
     timeout: 120_000
