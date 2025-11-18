@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import axios from 'axios';
+import OpenAI from 'openai';
 import { admin, db, FieldValue } from './firebaseAdmin.js';
 
 // ====== App básica ======
@@ -13,6 +14,7 @@ app.use(express.json());
 
 // ====== Entorno ======
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // Modelos desde variables de entorno con fallbacks inteligentes
 const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || 'gemini-2.0-flash-exp';
@@ -67,6 +69,15 @@ async function retryWithModels(operation, initialModel, validModels) {
 }
 const VIMEO_ACCESS_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
 const SCORE_THRESHOLD = 10; // Umbral para permitir subida a Vimeo (10% para pruebas)
+
+// Inicializar OpenAI si está configurado
+let openai = null;
+if (OPENAI_API_KEY) {
+  openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+  console.log('✅ OpenAI configurado para generación de cartas descriptivas');
+} else {
+  console.log('⚠️ OpenAI no configurado - solo se usará Gemini');
+}
 
 if (!GEMINI_API_KEY) throw new Error('Falta GEMINI_API_KEY');
 
@@ -688,9 +699,27 @@ app.post('/generateCartaDescriptiva', async (req, res) => {
 
   try {
     console.log('[generateCartaDescriptiva] Generando carta inicial...');
-    // 1) Generar la carta usando Gemini
-    const cartaGenerada = await generateCartaWithGemini(temaDescription.trim());
-    console.log('[generateCartaDescriptiva] Carta generada, longitud:', cartaGenerada.length);
+    
+    // 1) Intentar con OpenAI primero (más confiable)
+    let cartaGenerada;
+    let usedOpenAI = false;
+    
+    if (openai) {
+      try {
+        console.log('[generateCartaDescriptiva] Usando OpenAI...');
+        cartaGenerada = await generateCartaWithOpenAI(temaDescription.trim());
+        usedOpenAI = true;
+        console.log('[generateCartaDescriptiva] Carta generada con OpenAI, longitud:', cartaGenerada.length);
+      } catch (openaiError) {
+        console.warn('[generateCartaDescriptiva] Error con OpenAI, intentando con Gemini:', openaiError.message);
+        cartaGenerada = await generateCartaWithGemini(temaDescription.trim());
+        console.log('[generateCartaDescriptiva] Carta generada con Gemini, longitud:', cartaGenerada.length);
+      }
+    } else {
+      // Si no hay OpenAI configurado, usar Gemini directamente
+      cartaGenerada = await generateCartaWithGemini(temaDescription.trim());
+      console.log('[generateCartaDescriptiva] Carta generada con Gemini, longitud:', cartaGenerada.length);
+    }
 
     console.log('[generateCartaDescriptiva] Analizando carta...');
     // 2) Analizar la carta generada para asegurar 100%
@@ -700,8 +729,18 @@ app.post('/generateCartaDescriptiva', async (req, res) => {
     // 3) Verificar que obtenga 100%
     if (analysis.score < 100) {
       console.warn('[generateCartaDescriptiva] Score < 100, regenerando...');
-      // Intentar regenerar una vez más
-      const cartaRegenerada = await generateCartaWithGemini(temaDescription.trim(), analysis.suggestions);
+      // Intentar regenerar una vez más con el mismo método que funcionó
+      let cartaRegenerada;
+      if (usedOpenAI && openai) {
+        try {
+          cartaRegenerada = await generateCartaWithOpenAI(temaDescription.trim(), analysis.suggestions);
+        } catch (e) {
+          console.warn('[generateCartaDescriptiva] Error regenerando con OpenAI:', e.message);
+          cartaRegenerada = await generateCartaWithGemini(temaDescription.trim(), analysis.suggestions);
+        }
+      } else {
+        cartaRegenerada = await generateCartaWithGemini(temaDescription.trim(), analysis.suggestions);
+      }
       console.log('[generateCartaDescriptiva] Carta regenerada, longitud:', cartaRegenerada.length);
       const analysisRegenerado = await analyzeCartaWithGemini(cartaRegenerada);
       console.log('[generateCartaDescriptiva] Análisis regenerado, score:', analysisRegenerado.score);
@@ -740,7 +779,76 @@ app.post('/generateCartaDescriptiva', async (req, res) => {
   }
 });
 
-// Función para generar carta descriptiva con Gemini
+// Función para generar carta descriptiva con OpenAI (preferida)
+async function generateCartaWithOpenAI(temaDescription, suggestionsPrevias = []) {
+  console.log('[generateCartaWithOpenAI] Inicio - temaDescription length:', temaDescription.length, 'suggestions:', suggestionsPrevias.length);
+  
+  if (!openai) {
+    throw new Error('OpenAI no está configurado');
+  }
+
+  const suggestionsText = suggestionsPrevias.length > 0 ?
+    `\n\nMejoras de versiones anteriores a considerar:\n${suggestionsPrevias.map(s => `- ${s}`).join('\n')}` : '';
+
+  const prompt = `Genera una carta descriptiva completa para una clase universitaria basada en la siguiente descripción del tema:
+
+DESCRIPCIÓN DEL TEMA:
+${temaDescription}
+
+${suggestionsText}
+
+INSTRUCCIONES PARA LA CARTA DESCRIPTIVA:
+- Debe ser completa y profesional
+- Incluir todos los elementos pedagógicos necesarios
+- Seguir las mejores prácticas de diseño instruccional
+- Asegurar que cumpla con TODOS los criterios de evaluación para obtener 100%
+- Lenguaje claro, accesible y motivador
+- Estructura lógica y organizada
+
+ELEMENTOS REQUERIDOS:
+1. Título atractivo y descriptivo
+2. Descripción general del curso
+3. Objetivos de aprendizaje específicos y medibles
+4. Contenido temático detallado
+5. Metodología y actividades
+6. Recursos necesarios
+7. Sistema de evaluación
+8. Criterios de evaluación claros
+9. Bibliografía y referencias
+
+IMPORTANTE: La carta debe estar optimizada para obtener la máxima puntuación en análisis pedagógico. Incluye todos los elementos que demuestren calidad educativa excepcional.
+
+Responde SOLO con el texto completo de la carta descriptiva, sin explicaciones adicionales.`;
+
+  console.log('[generateCartaWithOpenAI] Llamando a OpenAI API...');
+  
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4-turbo-preview',
+    messages: [
+      {
+        role: 'system',
+        content: 'Eres un experto en diseño instruccional y pedagogía universitaria. Generas cartas descriptivas de alta calidad que cumplen con todos los estándares educativos.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    temperature: 0.3,
+    max_tokens: 4000
+  });
+
+  const txt = completion.choices[0]?.message?.content || '';
+  console.log('[generateCartaWithOpenAI] Texto extraído, length:', txt.length);
+  
+  if (!txt || txt.length < 100) {
+    throw new Error('La respuesta de OpenAI está vacía o es muy corta');
+  }
+  
+  return txt.trim();
+}
+
+// Función para generar carta descriptiva con Gemini (fallback)
 async function generateCartaWithGemini(temaDescription, suggestionsPrevias = []) {
   console.log('[generateCartaWithGemini] Inicio - temaDescription length:', temaDescription.length, 'suggestions:', suggestionsPrevias.length);
   return retryWithModels(async (MODEL) => {
