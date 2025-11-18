@@ -745,138 +745,148 @@ async function generateCartaOptimizadaWithOpenAI(temaDescription) {
 
   const prompt = `Genera una carta descriptiva COMPLETA y PROFESIONAL para UNA CLASE EN VIDEO sobre: "${temaDescription}"
 
-CRÍTICO: Esta carta describe UNA SOLA CLASE EN VIDEO (8-15 minutos) optimizada para obtener 100% en análisis de calidad pedagógica y técnica. Debe cumplir EXACTAMENTE con los 16 criterios de evaluación (R1-R16).
+CRITICO: Esta carta describe UNA SOLA CLASE EN VIDEO (8-15 minutos) optimizada para obtener 100% en analisis de calidad pedagogica y tecnica. Debe cumplir EXACTAMENTE con los 16 criterios de evaluacion (R1-R16).
 
-📋 INFORMACIÓN GENERAL DE LA CLASE
-- Título de la clase (atractivo y específico)
-- Tema central
-- Duración: 10-13 minutos (óptimo para análisis)
-- Modalidad: Video educativo asíncrono
-- Descripción: Qué aprenderá el estudiante en esta clase específica
+FORMATO REQUERIDO:
+- SIN emojis ni caracteres especiales
+- SIN asteriscos, guiones, o simbolos decorativos
+- Texto limpio y profesional
+- Apto para PDF y visualizacion en modal
+- Estructura clara con titulos y subtitulos
+- Parrafos bien organizados
 
-🎯 OBJETIVOS DE APRENDIZAJE (1-2 objetivos) - CUMPLE R2
-- Objetivos específicos y medibles para ESTA clase
-- Usar verbos de acción observables (identificar, aplicar, crear, analizar, evaluar)
-- Formato: "Al finalizar esta clase, el estudiante será capaz de..."
-- DEBE aparecer en primeros 90 segundos del video
+INFORMACION GENERAL DE LA CLASE
+Titulo de la clase (atractivo y especifico)
+Tema central
+Duracion: 10-13 minutos (optimo para analisis)
+Modalidad: Video educativo asincrono
+Descripcion: Que aprendera el estudiante en esta clase especifica
 
-🎬 ESTRUCTURA DE LA CLASE EN VIDEO (Timestamps EXACTOS) - CUMPLE R1, R3, R5, R13
+OBJETIVOS DE APRENDIZAJE (1-2 objetivos) - CUMPLE R2
+Objetivos especificos y medibles para ESTA clase
+Usar verbos de accion observables (identificar, aplicar, crear, analizar, evaluar)
+Formato: "Al finalizar esta clase, el estudiante sera capaz de..."
+DEBE aparecer en primeros 90 segundos del video
 
-**HOOK - Inicio Impactante (0:00-0:25)** - CUMPLE R1_HOOK
-- Tipo: Historia personal / Pregunta provocadora / Demo del resultado final
-- Descripción exacta de qué se mostrará
-- Objetivo: Captar atención inmediata (≤30 segundos)
+ESTRUCTURA DE LA CLASE EN VIDEO (Timestamps EXACTOS) - CUMPLE R1, R3, R5, R13
 
-**OBJETIVOS Y MAPA (0:25-1:15)** - CUMPLE R2_OBJETIVOS, R3_MAPA_3PASOS
-- Presentación clara de 1-2 objetivos de aprendizaje
-- Roadmap visual de EXACTAMENTE 3 pasos máximo
-- Ejemplo: "Paso 1: Concepto base, Paso 2: Aplicación práctica, Paso 3: Caso real"
-- Señalización verbal: "Hoy aprenderemos 3 cosas..."
+SECCION 1: HOOK - Inicio Impactante (0:00-0:25) - CUMPLE R1_HOOK
+Tipo: Historia personal / Pregunta provocadora / Demo del resultado final
+Descripcion exacta de que se mostrara
+Objetivo: Captar atencion inmediata (menor o igual a 30 segundos)
 
-**BLOQUE 1: Concepto Fundamental (1:15-4:00)** - CUMPLE R4, R6, R7
-- Señalización: "Parte 1 de 3" visible en pantalla
-- Contenido: Explicación del concepto clave
-- Carga cognitiva: MÁXIMO 3 bullets por diapositiva, MÁXIMO 10 palabras por bullet
-- Demo inmediata: Ejemplo práctico del concepto (timestamp específico ~2:30)
-- Señalización visual: Uso de cursor, zoom, resaltado, "Paso 1 de 3"
-- Cambios visuales cada 60-90 segundos
+SECCION 2: OBJETIVOS Y MAPA (0:25-1:15) - CUMPLE R2_OBJETIVOS, R3_MAPA_3PASOS
+Presentacion clara de 1-2 objetivos de aprendizaje
+Roadmap visual de EXACTAMENTE 3 pasos maximo
+Ejemplo: Paso 1: Concepto base, Paso 2: Aplicacion practica, Paso 3: Caso real
+Senalizacion verbal: Hoy aprenderemos 3 cosas...
 
-**MICRO-PRÁCTICA 1 (4:00-4:45)** - CUMPLE R8_PRACTICA_ACTIVA
-- Instrucción clara: "Pausa el video y [acción específica]"
-- Actividad práctica concreta (≤45 segundos)
-- Ejemplo: "Identifica 3 ejemplos en tu contexto"
+SECCION 3: BLOQUE 1 - Concepto Fundamental (1:15-4:00) - CUMPLE R4, R6, R7
+Senalizacion: Parte 1 de 3 visible en pantalla
+Contenido: Explicacion del concepto clave
+Carga cognitiva: MAXIMO 3 bullets por diapositiva, MAXIMO 10 palabras por bullet
+Demo inmediata: Ejemplo practico del concepto (timestamp especifico aproximadamente 2:30)
+Senalizacion visual: Uso de cursor, zoom, resaltado, Paso 1 de 3
+Cambios visuales cada 60-90 segundos
 
-**BLOQUE 2: Aplicación Práctica (4:45-7:30)** - CUMPLE R4, R6, R7
-- Señalización: "Parte 2 de 3" visible
-- Demo paso a paso con código/herramienta real
-- Vinculación concepto→demo con timestamps específicos
-- Señalización: Resaltado de elementos clave, "Paso 2 de 3"
-- Cambios visuales cada 60-90 segundos
+SECCION 4: MICRO-PRACTICA 1 (4:00-4:45) - CUMPLE R8_PRACTICA_ACTIVA
+Instruccion clara: Pausa el video y [accion especifica]
+Actividad practica concreta (menor o igual a 45 segundos)
+Ejemplo: Identifica 3 ejemplos en tu contexto
 
-**MICRO-PRÁCTICA 2 (7:30-8:15)** - CUMPLE R8_PRACTICA_ACTIVA
-- Instrucción clara: "Tu turno: [mini-reto específico]"
-- Actividad aplicada (≤45 segundos)
-- Ejemplo: "Modifica este código para [objetivo]"
+SECCION 5: BLOQUE 2 - Aplicacion Practica (4:45-7:30) - CUMPLE R4, R6, R7
+Senalizacion: Parte 2 de 3 visible
+Demo paso a paso con codigo/herramienta real
+Vinculacion concepto a demo con timestamps especificos
+Senalizacion: Resaltado de elementos clave, Paso 2 de 3
+Cambios visuales cada 60-90 segundos
 
-**BLOQUE 3: Caso Real y Transferencia (8:15-10:30)** - CUMPLE R10_TRANSFERENCIA
-- Señalización: "Parte 3 de 3" visible
-- Caso del mundo real (dataset real, API real, situación profesional)
-- Descripción detallada del caso
-- Aplicación del concepto al caso
-- Cambios visuales cada 60-90 segundos
+SECCION 6: MICRO-PRACTICA 2 (7:30-8:15) - CUMPLE R8_PRACTICA_ACTIVA
+Instruccion clara: Tu turno: [mini-reto especifico]
+Actividad aplicada (menor o igual a 45 segundos)
+Ejemplo: Modifica este codigo para [objetivo]
 
-**RECUPERACIÓN Y CHEQUEO (10:30-11:15)** - CUMPLE R9_RECUPERACION
-- Pregunta de comprensión rápida
-- Ejemplo: "¿Cuál es la diferencia entre X y Y?"
-- Respuesta/clave proporcionada brevemente (5-10 segundos)
+SECCION 7: BLOQUE 3 - Caso Real y Transferencia (8:15-10:30) - CUMPLE R10_TRANSFERENCIA
+Senalizacion: Parte 3 de 3 visible
+Caso del mundo real (dataset real, API real, situacion profesional)
+Descripcion detallada del caso
+Aplicacion del concepto al caso
+Cambios visuales cada 60-90 segundos
 
-**CIERRE Y RECAP (11:15-12:15)** - CUMPLE R11_CIERRE_RECAP
-- Recap de EXACTAMENTE 3 bullets (máximo 10 palabras cada uno)
-- Errores comunes a evitar (2-3 puntos específicos)
-- Formato visual claro
+SECCION 8: RECUPERACION Y CHEQUEO (10:30-11:15) - CUMPLE R9_RECUPERACION
+Pregunta de comprension rapida
+Ejemplo: Cual es la diferencia entre X y Y?
+Respuesta/clave proporcionada brevemente (5-10 segundos)
 
-**TAREA APLICABLE (12:15-13:00)** - CUMPLE R12_TAREA_Y_CRITERIOS
-- Tarea concreta (≤20 minutos de ejecución)
-- Entregable específico y medible
-- Criterios de evaluación (checklist de 3-5 puntos claros)
+SECCION 9: CIERRE Y RECAP (11:15-12:15) - CUMPLE R11_CIERRE_RECAP
+Recap de EXACTAMENTE 3 bullets (maximo 10 palabras cada uno)
+Errores comunes a evitar (2-3 puntos especificos)
+Formato visual claro
 
-📊 CALIDAD TÉCNICA ESPECIFICADA - CUMPLE R14, R15, R16
+SECCION 10: TAREA APLICABLE (12:15-13:00) - CUMPLE R12_TAREA_Y_CRITERIOS
+Tarea concreta (menor o igual a 20 minutos de ejecucion)
+Entregable especifico y medible
+Criterios de evaluacion (checklist de 3-5 puntos claros)
 
-**Video (R14_MEDIA_VIDEO):**
-- Resolución: 1920x1080 (Full HD mínimo)
-- FPS: 30 fps estable
-- Iluminación: Uniforme, sin sombras duras sobre ojos
-- Encuadre: Regla de tercios, headroom adecuado (espacio sobre cabeza)
-- Fondo: Limpio, no distractor, bajo ruido visual
-- Enfoque: Nítido en rostro/contenido (sin desenfoque)
-- Balance de blancos: Consistente (piel natural, sin tonos azules/amarillos)
-- Sin artefactos de compresión graves
+CALIDAD TECNICA ESPECIFICADA - CUMPLE R14, R15, R16
 
-**Audio (R15_MEDIA_AUDIO):**
-- Loudness: -14 LUFS (voz clara y profesional)
-- Picos: ≤ -1 dBTP (sin clipping)
-- Ruido de fondo: < -50 dBFS (muy limpio)
-- Sample rate: 48 kHz
-- Canales: Estéreo
-- Sin clipping, eco, reverberación excesiva
-- Distancia de micrófono adecuada (sin pops de "p")
-- Consistencia de volumen (sin cambios abruptos)
+Video (R14_MEDIA_VIDEO):
+Resolucion: 1920x1080 (Full HD minimo)
+FPS: 30 fps estable
+Iluminacion: Uniforme, sin sombras duras sobre ojos
+Encuadre: Regla de tercios, headroom adecuado (espacio sobre cabeza)
+Fondo: Limpio, no distractor, bajo ruido visual
+Enfoque: Nitido en rostro/contenido (sin desenfoque)
+Balance de blancos: Consistente (piel natural, sin tonos azules/amarillos)
+Sin artefactos de compresion graves
 
-**Presentación (R16_MEDIA_PRESENTACION):**
-- Tipografía: ≥18pt, legible
-- Contraste: Alto (WCAG AAA, evitar rojo/verde crítico)
-- Paleta: Consistente en todo el video
-- Lower-thirds: Legibles y profesionales
-- Transiciones: Sobrias (sin efectos excesivos)
-- Sincronización A/V: Perfecta (audio y video sincronizados)
-- Estabilidad: Sin temblores notorios
-- Subtítulos/CC: Incluidos en español
+Audio (R15_MEDIA_AUDIO):
+Loudness: -14 LUFS (voz clara y profesional)
+Picos: menor o igual a -1 dBTP (sin clipping)
+Ruido de fondo: menor a -50 dBFS (muy limpio)
+Sample rate: 48 kHz
+Canales: Estereo
+Sin clipping, eco, reverberacion excesiva
+Distancia de microfono adecuada (sin pops de p)
+Consistencia de volumen (sin cambios abruptos)
 
-🎯 RITMO Y ACCESIBILIDAD - CUMPLE R13_RITMO_ACCESIBILIDAD
-- Sin pantalla estática >20 segundos
-- Cortes/cambios cada 60-90 segundos
-- Ritmo ágil y dinámico
-- Subtítulos completos en español
-- Contraste accesible (WCAG AAA)
+Presentacion (R16_MEDIA_PRESENTACION):
+Tipografia: mayor o igual a 18pt, legible
+Contraste: Alto (WCAG AAA, evitar rojo/verde critico)
+Paleta: Consistente en todo el video
+Lower-thirds: Legibles y profesionales
+Transiciones: Sobrias (sin efectos excesivos)
+Sincronizacion A/V: Perfecta (audio y video sincronizados)
+Estabilidad: Sin temblores notorios
+Subtitulos/CC: Incluidos en espanol
 
-📦 RECURSOS Y MATERIALES
-- Links a recursos mencionados
-- Repositorio de código (si aplica)
-- Snippets de código descargables
-- Plantillas mencionadas
-- Rúbrica de evaluación de la tarea
+RITMO Y ACCESIBILIDAD - CUMPLE R13_RITMO_ACCESIBILIDAD
+Sin pantalla estatica mayor a 20 segundos
+Cortes/cambios cada 60-90 segundos
+Ritmo agil y dinamico
+Subtitulos completos en espanol
+Contraste accesible (WCAG AAA)
 
-📖 REFERENCIAS
-- 3-5 referencias actualizadas y relevantes
-- Formato APA
-- Recursos digitales accesibles
+RECURSOS Y MATERIALES
+Links a recursos mencionados
+Repositorio de codigo (si aplica)
+Snippets de codigo descargables
+Plantillas mencionadas
+Rubrica de evaluacion de la tarea
 
-FORMATO DE SALIDA:
-Escribe la carta descriptiva en español profesional, con estructura clara, timestamps EXACTOS, y todos los elementos necesarios para que cuando se grabe el video siguiendo esta carta, obtenga 100% en el análisis de calidad pedagógica y técnica (R1-R16).
+REFERENCIAS
+3-5 referencias actualizadas y relevantes
+Formato APA
+Recursos digitales accesibles
 
-La carta debe ser un guion de producción profesional, detallado y listo para usar.
+INSTRUCCIONES FINALES:
+Escribe la carta descriptiva en espanol profesional, con estructura clara, timestamps EXACTOS, y todos los elementos necesarios para que cuando se grabe el video siguiendo esta carta, obtenga 100% en el analisis de calidad pedagogica y tecnica (R1-R16).
 
-Responde SOLO con el texto completo de la carta descriptiva, bien formateado y listo para usar como guion de producción.`;
+La carta debe ser un guion de produccion profesional, detallado y listo para usar.
+
+IMPORTANTE: Usa SOLO texto limpio. SIN emojis, SIN asteriscos, SIN guiones decorativos, SIN caracteres especiales. Formato apto para PDF y modal.
+
+Responde SOLO con el texto completo de la carta descriptiva, bien formateado y listo para usar como guion de produccion.`;
 
   console.log('[generateCartaOptimizadaWithOpenAI] Llamando a OpenAI API...');
   
