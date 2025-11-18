@@ -184,7 +184,9 @@ async function geminiAnalyze({ fileUri, mimeType }) {
           },
           {
         text:
-`Evalúa el video adjunto como clase en video optimizada para atención y aprendizaje y calidad técnica profesional. Usa audio + transcripción + metadatos (resolución, fps, bitrate, sample rate, canales) si están disponibles. No inventes datos: si algo no puede detectarse, márcalo como "unknown". Responde SOLO JSON con el esquema indicado al final.
+`IMPORTANTE: Responde SIEMPRE en ESPAÑOL. Todos los textos, notas, sugerencias y descripciones deben estar en español.
+
+Evalúa el video adjunto como clase en video optimizada para atención y aprendizaje y calidad técnica profesional. Usa audio + transcripción + metadatos (resolución, fps, bitrate, sample rate, canales) si están disponibles. No inventes datos: si algo no puede detectarse, márcalo como "unknown". Responde SOLO JSON con el esquema indicado al final.
 
 REGLAS (mejores prácticas pedagógicas + estándares técnicos, con IDs y pesos):
 
@@ -233,18 +235,18 @@ CÁLCULO DEL SCORE:
 • Si una regla es "unknown", no la cuentes en el denominador y añádela a unknownRules.
 • Penalización: si R4_CARGA_COGNITIVA detecta >3 bullets simultáneos, resta 5 puntos al score total (sin bajar de 0).
 
-DETALLES A ENTREGAR POR REGLA:
+DETALLES A ENTREGAR POR REGLA (TODO EN ESPAÑOL):
 • ok: boolean
 • subScore: number (0–100)
-• note: string (breve explicación accionable)
-• evidence: { timestamps?: [{start:number,end:number,description:string}], count?: number, text?: string[], pairs?: [{concept:string, demoT:number}], meta?: object }
-• suggestions: string[] (mejoras concretas)
+• note: string (breve explicación accionable EN ESPAÑOL)
+• evidence: { timestamps?: [{start:number,end:number,description:string (EN ESPAÑOL)}], count?: number, text?: string[] (EN ESPAÑOL), pairs?: [{concept:string (EN ESPAÑOL), demoT:number}], meta?: object }
+• suggestions: string[] (mejoras concretas EN ESPAÑOL)
 
 MÉTRICAS (si es posible, aproxima):
 duracion_min, max_bullets_por_slide, palabras_promedio_por_bullet, micropracticas_count, bloques_count, mayor_estatico_seg, cortes_por_min, wpm_aprox, cc_subtitulos, video_resolution_px (ej. "1920x1080" o unknown), video_fps, video_bitrate_mbps, audio_lufs, audio_peak_db, noise_floor_db, sample_rate_hz, audio_channels (1|2|unknown), lab_sync_ok (boolean|null), lighting_evenness_0_100 (estimado), white_balance_ok (boolean|null), focus_ok (boolean|null), stabilization_ok (boolean|null), compression_artifacts (boolean|null).
 
-SALIDAS EXTRA:
-summary (2–3 frases útiles para el docente); findings (R1…R16); suggestions (Top 5 acciones priorizadas); unknownRules;
+SALIDAS EXTRA (TODO EN ESPAÑOL):
+summary (2–3 frases útiles para el docente EN ESPAÑOL); findings (R1…R16 con textos EN ESPAÑOL); suggestions (Top 5 acciones priorizadas EN ESPAÑOL); unknownRules;
 assetsDetected: { links:string, repo:boolean, snippets:boolean, plantillas:boolean, rubrica:boolean }
 structure: { hook:{start,end,type}, objetivos:string, mapa:{steps,count}, paresConceptoDemo:[{concept,demoT}], microPracticas:[{t,instruccion}], recuperacion:[{t,pregunta,clave}], casoReal:{t,descripcion}, recap:{bullets}, tarea:{instruccion,entregable,criterios} }
 pacing: { longSegments:[{start,end,desc}], avgGapMicroPracticeSec }
@@ -255,7 +257,7 @@ video: { resolution_px:string|null, fps:number|null, bitrate_mbps:number|null, e
 audio: { lufs:number|null, peak_db:number|null, noise_floor_db:number|null, sample_rate_hz:number|null, channels:number|null, clipping:boolean|null, reverb_echo:boolean|null, pops_sibilance:boolean|null, hum_hiss:boolean|null, mic_distance_ok:boolean|null, consistency_ok:boolean|null, issues:[{t:number,desc:string}] }
 }
 
-ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional):
+ESQUEMA JSON EXACTO (responde SOLO esto, sin texto adicional, TODO EN ESPAÑOL):
 {
 "score": number,
 "summary": string,
