@@ -1,4 +1,4 @@
-// server.js - Analyzer API (Render)
+ // server.js - Analyzer API (Render)
 // ====== Dependencias ======
 import express from 'express';
 import cors from 'cors';
@@ -745,7 +745,7 @@ async function generateCartaOptimizadaWithOpenAI(temaDescription) {
 
   const prompt = `Genera una carta descriptiva COMPLETA y PROFESIONAL para UNA CLASE EN VIDEO sobre: "${temaDescription}"
 
-CRITICO: Esta carta describe UNA SOLA CLASE EN VIDEO (8-15 minutos) optimizada para obtener 100% en analisis de calidad pedagogica y tecnica. Debe cumplir EXACTAMENTE con los 16 criterios de evaluacion (R1-R16).
+CRITICO: Esta carta describe UNA SOLA CLASE EN VIDEO (8-15 minutos). SOLO incluye contenido pedagogico de la clase, SIN especificaciones tecnicas de video/audio/presentacion.
 
 FORMATO REQUERIDO:
 - SIN emojis ni caracteres especiales
@@ -758,114 +758,64 @@ FORMATO REQUERIDO:
 INFORMACION GENERAL DE LA CLASE
 Titulo de la clase (atractivo y especifico)
 Tema central
-Duracion: 10-13 minutos (optimo para analisis)
+Duracion: 10-13 minutos
 Modalidad: Video educativo asincrono
 Descripcion: Que aprendera el estudiante en esta clase especifica
 
-OBJETIVOS DE APRENDIZAJE (1-2 objetivos) - CUMPLE R2
+OBJETIVOS DE APRENDIZAJE
 Objetivos especificos y medibles para ESTA clase
 Usar verbos de accion observables (identificar, aplicar, crear, analizar, evaluar)
 Formato: "Al finalizar esta clase, el estudiante sera capaz de..."
-DEBE aparecer en primeros 90 segundos del video
 
-ESTRUCTURA DE LA CLASE EN VIDEO (Timestamps EXACTOS) - CUMPLE R1, R3, R5, R13
+CONTENIDO PEDAGOGICO DE LA CLASE
 
-SECCION 1: HOOK - Inicio Impactante (0:00-0:25) - CUMPLE R1_HOOK
+SECCION 1: HOOK - Inicio Impactante (0:00-0:25)
 Tipo: Historia personal / Pregunta provocadora / Demo del resultado final
 Descripcion exacta de que se mostrara
-Objetivo: Captar atencion inmediata (menor o igual a 30 segundos)
+Objetivo: Captar atencion inmediata
 
-SECCION 2: OBJETIVOS Y MAPA (0:25-1:15) - CUMPLE R2_OBJETIVOS, R3_MAPA_3PASOS
+SECCION 2: OBJETIVOS Y MAPA (0:25-1:15)
 Presentacion clara de 1-2 objetivos de aprendizaje
-Roadmap visual de EXACTAMENTE 3 pasos maximo
+Roadmap visual de 3 pasos
 Ejemplo: Paso 1: Concepto base, Paso 2: Aplicacion practica, Paso 3: Caso real
-Senalizacion verbal: Hoy aprenderemos 3 cosas...
 
-SECCION 3: BLOQUE 1 - Concepto Fundamental (1:15-4:00) - CUMPLE R4, R6, R7
-Senalizacion: Parte 1 de 3 visible en pantalla
+SECCION 3: BLOQUE 1 - Concepto Fundamental (1:15-4:00)
 Contenido: Explicacion del concepto clave
-Carga cognitiva: MAXIMO 3 bullets por diapositiva, MAXIMO 10 palabras por bullet
-Demo inmediata: Ejemplo practico del concepto (timestamp especifico aproximadamente 2:30)
-Senalizacion visual: Uso de cursor, zoom, resaltado, Paso 1 de 3
-Cambios visuales cada 60-90 segundos
+Puntos principales (maximo 3 puntos, maximo 10 palabras cada uno)
+Demo inmediata: Ejemplo practico del concepto
 
-SECCION 4: MICRO-PRACTICA 1 (4:00-4:45) - CUMPLE R8_PRACTICA_ACTIVA
+SECCION 4: MICRO-PRACTICA 1 (4:00-4:45)
 Instruccion clara: Pausa el video y [accion especifica]
-Actividad practica concreta (menor o igual a 45 segundos)
-Ejemplo: Identifica 3 ejemplos en tu contexto
+Actividad practica concreta
+Ejemplo de respuesta esperada
 
-SECCION 5: BLOQUE 2 - Aplicacion Practica (4:45-7:30) - CUMPLE R4, R6, R7
-Senalizacion: Parte 2 de 3 visible
+SECCION 5: BLOQUE 2 - Aplicacion Practica (4:45-7:30)
 Demo paso a paso con codigo/herramienta real
-Vinculacion concepto a demo con timestamps especificos
-Senalizacion: Resaltado de elementos clave, Paso 2 de 3
-Cambios visuales cada 60-90 segundos
+Vinculacion concepto a demo
+Puntos clave a resaltar
 
-SECCION 6: MICRO-PRACTICA 2 (7:30-8:15) - CUMPLE R8_PRACTICA_ACTIVA
+SECCION 6: MICRO-PRACTICA 2 (7:30-8:15)
 Instruccion clara: Tu turno: [mini-reto especifico]
-Actividad aplicada (menor o igual a 45 segundos)
-Ejemplo: Modifica este codigo para [objetivo]
+Actividad aplicada
+Solucion esperada
 
-SECCION 7: BLOQUE 3 - Caso Real y Transferencia (8:15-10:30) - CUMPLE R10_TRANSFERENCIA
-Senalizacion: Parte 3 de 3 visible
+SECCION 7: BLOQUE 3 - Caso Real y Transferencia (8:15-10:30)
 Caso del mundo real (dataset real, API real, situacion profesional)
 Descripcion detallada del caso
 Aplicacion del concepto al caso
-Cambios visuales cada 60-90 segundos
 
-SECCION 8: RECUPERACION Y CHEQUEO (10:30-11:15) - CUMPLE R9_RECUPERACION
+SECCION 8: RECUPERACION Y CHEQUEO (10:30-11:15)
 Pregunta de comprension rapida
-Ejemplo: Cual es la diferencia entre X y Y?
-Respuesta/clave proporcionada brevemente (5-10 segundos)
+Respuesta/clave proporcionada
 
-SECCION 9: CIERRE Y RECAP (11:15-12:15) - CUMPLE R11_CIERRE_RECAP
-Recap de EXACTAMENTE 3 bullets (maximo 10 palabras cada uno)
+SECCION 9: CIERRE Y RECAP (11:15-12:15)
+Recap de 3 puntos principales (maximo 10 palabras cada uno)
 Errores comunes a evitar (2-3 puntos especificos)
-Formato visual claro
 
-SECCION 10: TAREA APLICABLE (12:15-13:00) - CUMPLE R12_TAREA_Y_CRITERIOS
+SECCION 10: TAREA APLICABLE (12:15-13:00)
 Tarea concreta (menor o igual a 20 minutos de ejecucion)
 Entregable especifico y medible
 Criterios de evaluacion (checklist de 3-5 puntos claros)
-
-CALIDAD TECNICA ESPECIFICADA - CUMPLE R14, R15, R16
-
-Video (R14_MEDIA_VIDEO):
-Resolucion: 1920x1080 (Full HD minimo)
-FPS: 30 fps estable
-Iluminacion: Uniforme, sin sombras duras sobre ojos
-Encuadre: Regla de tercios, headroom adecuado (espacio sobre cabeza)
-Fondo: Limpio, no distractor, bajo ruido visual
-Enfoque: Nitido en rostro/contenido (sin desenfoque)
-Balance de blancos: Consistente (piel natural, sin tonos azules/amarillos)
-Sin artefactos de compresion graves
-
-Audio (R15_MEDIA_AUDIO):
-Loudness: -14 LUFS (voz clara y profesional)
-Picos: menor o igual a -1 dBTP (sin clipping)
-Ruido de fondo: menor a -50 dBFS (muy limpio)
-Sample rate: 48 kHz
-Canales: Estereo
-Sin clipping, eco, reverberacion excesiva
-Distancia de microfono adecuada (sin pops de p)
-Consistencia de volumen (sin cambios abruptos)
-
-Presentacion (R16_MEDIA_PRESENTACION):
-Tipografia: mayor o igual a 18pt, legible
-Contraste: Alto (WCAG AAA, evitar rojo/verde critico)
-Paleta: Consistente en todo el video
-Lower-thirds: Legibles y profesionales
-Transiciones: Sobrias (sin efectos excesivos)
-Sincronizacion A/V: Perfecta (audio y video sincronizados)
-Estabilidad: Sin temblores notorios
-Subtitulos/CC: Incluidos en espanol
-
-RITMO Y ACCESIBILIDAD - CUMPLE R13_RITMO_ACCESIBILIDAD
-Sin pantalla estatica mayor a 20 segundos
-Cortes/cambios cada 60-90 segundos
-Ritmo agil y dinamico
-Subtitulos completos en espanol
-Contraste accesible (WCAG AAA)
 
 RECURSOS Y MATERIALES
 Links a recursos mencionados
@@ -880,11 +830,14 @@ Formato APA
 Recursos digitales accesibles
 
 INSTRUCCIONES FINALES:
-Escribe la carta descriptiva en espanol profesional, con estructura clara, timestamps EXACTOS, y todos los elementos necesarios para que cuando se grabe el video siguiendo esta carta, obtenga 100% en el analisis de calidad pedagogica y tecnica (R1-R16).
+Escribe la carta descriptiva en espanol profesional, con estructura clara, timestamps EXACTOS, y todos los elementos necesarios.
 
 La carta debe ser un guion de produccion profesional, detallado y listo para usar.
 
-IMPORTANTE: Usa SOLO texto limpio. SIN emojis, SIN asteriscos, SIN guiones decorativos, SIN caracteres especiales. Formato apto para PDF y modal.
+IMPORTANTE:
+- Usa SOLO texto limpio. SIN emojis, SIN asteriscos, SIN guiones decorativos, SIN caracteres especiales.
+- SOLO contenido pedagogico de la clase. NO incluyas especificaciones tecnicas de video, audio o presentacion.
+- Formato apto para PDF y modal.
 
 Responde SOLO con el texto completo de la carta descriptiva, bien formateado y listo para usar como guion de produccion.`;
 
@@ -1167,6 +1120,178 @@ SALIDA JSON EXACTA:
   }
   }, TEXT_MODEL, VALID_TEXT_MODELS);
 }
+
+// ====== Cache para Google Sheet (evitar múltiples requests) ======
+let clasesCache = {
+  data: null,
+  timestamp: null,
+  ttl: 5 * 60 * 1000 // 5 minutos de TTL
+};
+
+// ====== Función helper para obtener datos del Google Sheet ======
+async function getGoogleSheetData() {
+  const now = Date.now();
+
+  // Si el cache es válido, retornar datos cacheados
+  if (clasesCache.data && clasesCache.timestamp && (now - clasesCache.timestamp) < clasesCache.ttl) {
+    console.log('[getGoogleSheetData] Usando datos del cache');
+    return clasesCache.data;
+  }
+
+  console.log('[getGoogleSheetData] Obteniendo datos frescos del Google Sheet');
+
+  const SHEET_ID = '1PAqolSipsOv41k5Ps2oBuoLMvepfBEqJocJXlnXUQSI';
+  const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+
+  const response = await axios.get(CSV_URL, {
+    timeout: 10000,
+    headers: {
+      'User-Agent': 'UDEL-Tools/1.0'
+    }
+  });
+
+  // Parsear el CSV
+  const lines = response.data.split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+  // Buscar las columnas importantes
+  const moduleIndex = headers.findIndex(h => h.toLowerCase().includes('módulo') || h.toLowerCase().includes('modulo'));
+  const cuatrimestreIndex = headers.findIndex(h => h.toLowerCase().includes('cuatrimestre'));
+  const materiaIndex = headers.findIndex(h => h.toLowerCase().includes('materia') || h.toLowerCase().includes('nombre'));
+  const urlIndex = headers.findIndex(h => h.toLowerCase().includes('url') || h.toLowerCase().includes('dropbox'));
+  const carreraIndex = headers.findIndex(h => h.toLowerCase().includes('carrera'));
+
+  const allClases = [];
+
+  // Parsear todas las filas
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+
+    // Parsear la línea (manejo básico de CSV con comillas)
+    const columns = [];
+    let currentColumn = '';
+    let insideQuotes = false;
+
+    for (let j = 0; j < line.length; j++) {
+      const char = line[j];
+      if (char === '"') {
+        insideQuotes = !insideQuotes;
+      } else if (char === ',' && !insideQuotes) {
+        columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
+        currentColumn = '';
+      } else {
+        currentColumn += char;
+      }
+    }
+    columns.push(currentColumn.trim().replace(/^"|"$/g, ''));
+
+    const materia = columns[materiaIndex] || '';
+    const url = columns[urlIndex] || '';
+    const modulo = columns[moduleIndex] || '';
+    const cuatrimestre = columns[cuatrimestreIndex] || '';
+    const carrera = columns[carreraIndex] || '';
+
+    if (materia) {
+      allClases.push({
+        modulo,
+        cuatrimestre,
+        materia,
+        url: url || null,
+        carrera,
+        hasUrl: !!url && url.trim().length > 0
+      });
+    }
+  }
+
+  // Guardar en cache
+  clasesCache.data = allClases;
+  clasesCache.timestamp = now;
+
+  return allClases;
+}
+
+// ====== Endpoint: Obtener sugerencias de materias ======
+app.get('/getSuggestions', async (req, res) => {
+  const { query } = req.query;
+
+  try {
+    if (!query || typeof query !== 'string' || query.trim().length < 1) {
+      return res.json({ ok: true, suggestions: [] });
+    }
+
+    const searchTerm = query.trim().toLowerCase();
+    const allClases = await getGoogleSheetData();
+
+    // Filtrar y obtener nombres únicos de materias
+    const matchingMaterias = new Set();
+
+    allClases.forEach(clase => {
+      if (clase.materia.toLowerCase().includes(searchTerm)) {
+        matchingMaterias.add(clase.materia);
+      }
+    });
+
+    // Convertir a array y limitar a 10 sugerencias
+    const suggestions = Array.from(matchingMaterias)
+      .sort()
+      .slice(0, 10);
+
+    return res.json({
+      ok: true,
+      suggestions,
+      total: suggestions.length
+    });
+
+  } catch (e) {
+    console.error('[getSuggestions] Error:', e?.message);
+    return res.status(500).json({
+      ok: false,
+      error: e.message || 'Error al obtener sugerencias'
+    });
+  }
+});
+
+// ====== Endpoint: Buscar clases en Google Sheet ======
+app.get('/searchClases', async (req, res) => {
+  const { query } = req.query;
+
+  try {
+    if (!query || typeof query !== 'string' || query.trim().length < 2) {
+      return res.status(400).json({ ok: false, error: 'Se requiere un término de búsqueda (mínimo 2 caracteres)' });
+    }
+
+    const searchTerm = query.trim().toLowerCase();
+    console.log(`[searchClases] Buscando: "${searchTerm}"`);
+
+    // Obtener datos del cache o Google Sheet
+    const allClases = await getGoogleSheetData();
+
+    // Filtrar resultados
+    const results = allClases.filter(clase =>
+      clase.materia.toLowerCase().includes(searchTerm)
+    );
+
+    console.log(`[searchClases] Encontrados ${results.length} resultados para "${searchTerm}"`);
+
+    return res.json({
+      ok: true,
+      query: query.trim(),
+      results,
+      total: results.length
+    });
+
+  } catch (e) {
+    console.error('[searchClases] Error:', e?.message);
+    if (e?.response) {
+      console.error('[searchClases] Response error:', e.response.status, e.response.data);
+    }
+    return res.status(500).json({
+      ok: false,
+      error: e.message || 'Error al buscar clases'
+    });
+  }
+});
 
 // ====== Salud ======
 app.get('/health', async (_req, res) => {
