@@ -1293,6 +1293,117 @@ app.get('/searchClases', async (req, res) => {
   }
 });
 
+// ====== Middleware de autenticación ======
+async function verifyAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No autorizado' });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Error verificando token:', error);
+    return res.status(401).json({ error: 'Token inválido' });
+  }
+}
+
+// ====== Endpoint: Crear usuario (solo superAdmin) ======
+app.post('/admin/createUser', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que el usuario actual sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const userData = userDoc.data();
+
+    if (!userData || userData.role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para crear usuarios' });
+    }
+
+    const { email, password, role, name, lastName, plantel, ciudad, whatsapp } = req.body;
+
+    // Validaciones básicas
+    if (!email || !password || !role) {
+      return res.status(400).json({ error: 'Email, contraseña y rol son obligatorios' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    // Validar roles permitidos
+    const validRoles = ['superAdmin', 'director', 'mentor', 'user'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Rol no válido' });
+    }
+
+    // Validar campos adicionales para director y mentor
+    if ((role === 'director' || role === 'mentor') && (!name || !lastName || !plantel || !ciudad || !whatsapp)) {
+      return res.status(400).json({ error: 'Los campos nombre, apellido, plantel, ciudad y whatsapp son obligatorios para este rol' });
+    }
+
+    // Crear usuario en Firebase Auth
+    const userRecord = await admin.auth().createUser({
+      email,
+      password,
+      emailVerified: false,
+      disabled: false
+    });
+
+    // Crear documento del usuario en Firestore
+    const newUserData = {
+      email,
+      role,
+      approved: true, // Usuarios creados por admin están pre-aprobados
+      createdAt: new Date().toISOString(),
+      createdBy: req.user.uid
+    };
+
+    // Agregar campos específicos según el rol
+    if (role === 'director' || role === 'mentor') {
+      newUserData.name = name;
+      newUserData.lastName = lastName;
+      newUserData.plantel = plantel;
+      newUserData.ciudad = ciudad;
+      newUserData.whatsapp = whatsapp;
+      newUserData.displayName = `${name} ${lastName}`;
+    } else {
+      newUserData.name = email.split('@')[0];
+    }
+
+    await db.collection('users').doc(userRecord.uid).set(newUserData);
+
+    console.log(`✅ Usuario creado: ${email} (${role}) por ${userData.email}`);
+
+    return res.json({
+      ok: true,
+      message: 'Usuario creado exitosamente',
+      userId: userRecord.uid,
+      email: userRecord.email
+    });
+
+  } catch (error) {
+    console.error('Error creando usuario:', error);
+
+    // Manejar errores específicos de Firebase
+    let errorMessage = 'Error al crear usuario';
+    if (error.code === 'auth/email-already-exists') {
+      errorMessage = 'Este correo electrónico ya está registrado';
+    } else if (error.code === 'auth/invalid-email') {
+      errorMessage = 'Correo electrónico inválido';
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = 'La contraseña debe tener al menos 6 caracteres';
+    }
+
+    return res.status(400).json({
+      error: errorMessage,
+      details: error.message
+    });
+  }
+});
+
 // ====== Salud ======
 app.get('/health', async (_req, res) => {
   try {
