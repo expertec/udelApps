@@ -1311,6 +1311,123 @@ async function verifyAuth(req, res, next) {
   }
 }
 
+// ====== Endpoint: Obtener planteles (superAdmin) ======
+app.get('/admin/getPlanteles', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que el usuario actual sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const userData = userDoc.data();
+
+    if (!userData || userData.role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para ver planteles' });
+    }
+
+    // Obtener todos los planteles ordenados por nombre
+    const plantelesSnapshot = await db.collection('planteles').orderBy('name').get();
+
+    const planteles = [];
+    plantelesSnapshot.forEach(doc => {
+      planteles.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    return res.json({
+      ok: true,
+      planteles
+    });
+
+  } catch (error) {
+    console.error('Error obteniendo planteles:', error);
+    return res.status(500).json({
+      error: 'Error al obtener planteles',
+      details: error.message
+    });
+  }
+});
+
+// ====== Endpoint: Crear plantel (solo superAdmin) ======
+app.post('/admin/createPlantel', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que el usuario actual sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const userData = userDoc.data();
+
+    if (!userData || userData.role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para crear planteles' });
+    }
+
+    const { name, ciudad } = req.body;
+
+    // Validaciones básicas
+    if (!name || !ciudad) {
+      return res.status(400).json({ error: 'Nombre y ciudad son obligatorios' });
+    }
+
+    // Crear plantel en Firestore
+    const plantelRef = await db.collection('planteles').add({
+      name: name.trim(),
+      ciudad: ciudad.trim(),
+      createdAt: new Date().toISOString(),
+      createdBy: req.user.uid
+    });
+
+    console.log(`✅ Plantel creado: ${name} (${ciudad}) por ${userData.email}`);
+
+    return res.json({
+      ok: true,
+      message: 'Plantel creado exitosamente',
+      plantelId: plantelRef.id,
+      name: name.trim(),
+      ciudad: ciudad.trim()
+    });
+
+  } catch (error) {
+    console.error('Error creando plantel:', error);
+    return res.status(500).json({
+      error: 'Error al crear plantel',
+      details: error.message
+    });
+  }
+});
+
+// ====== Endpoint: Eliminar plantel (solo superAdmin) ======
+app.delete('/admin/deletePlantel/:plantelId', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que el usuario actual sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const userData = userDoc.data();
+
+    if (!userData || userData.role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para eliminar planteles' });
+    }
+
+    const { plantelId } = req.params;
+
+    if (!plantelId) {
+      return res.status(400).json({ error: 'ID de plantel requerido' });
+    }
+
+    // Eliminar el plantel
+    await db.collection('planteles').doc(plantelId).delete();
+
+    console.log(`🗑️ Plantel eliminado: ${plantelId} por ${userData.email}`);
+
+    return res.json({
+      ok: true,
+      message: 'Plantel eliminado exitosamente'
+    });
+
+  } catch (error) {
+    console.error('Error eliminando plantel:', error);
+    return res.status(500).json({
+      error: 'Error al eliminar plantel',
+      details: error.message
+    });
+  }
+});
+
 // ====== Endpoint: Crear usuario (solo superAdmin) ======
 app.post('/admin/createUser', verifyAuth, async (req, res) => {
   try {
