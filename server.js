@@ -1358,29 +1358,27 @@ app.post('/admin/createPlantel', verifyAuth, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permisos para crear planteles' });
     }
 
-    const { name, ciudad } = req.body;
+    const { name } = req.body;
 
     // Validaciones básicas
-    if (!name || !ciudad) {
-      return res.status(400).json({ error: 'Nombre y ciudad son obligatorios' });
+    if (!name) {
+      return res.status(400).json({ error: 'Nombre del plantel es obligatorio' });
     }
 
     // Crear plantel en Firestore
     const plantelRef = await db.collection('planteles').add({
       name: name.trim(),
-      ciudad: ciudad.trim(),
       createdAt: new Date().toISOString(),
       createdBy: req.user.uid
     });
 
-    console.log(`✅ Plantel creado: ${name} (${ciudad}) por ${userData.email}`);
+    console.log(`✅ Plantel creado: ${name} por ${userData.email}`);
 
     return res.json({
       ok: true,
       message: 'Plantel creado exitosamente',
       plantelId: plantelRef.id,
-      name: name.trim(),
-      ciudad: ciudad.trim()
+      name: name.trim()
     });
 
   } catch (error) {
