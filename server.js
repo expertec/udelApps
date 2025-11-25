@@ -1793,9 +1793,11 @@ app.get('/getMisSolicitudesCertificados', verifyAuth, async (req, res) => {
     const solicitudes = [];
     solicitudesSnapshot.forEach(doc => {
       const data = doc.data();
+      // Asegurar que el ID del documento no sea sobrescrito
+      const { id: _, ...restData } = data; // Remover campo 'id' si existe en data
       solicitudes.push({
-        id: doc.id,
-        ...data,
+        id: doc.id, // ID del documento de Firestore
+        ...restData,
         createdAt: data.createdAt?.toDate().toISOString(),
         updatedAt: data.updatedAt?.toDate().toISOString()
       });
