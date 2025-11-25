@@ -1303,7 +1303,18 @@ async function verifyAuth(req, res, next) {
 
     const token = authHeader.split('Bearer ')[1];
     const decodedToken = await admin.auth().verifyIdToken(token);
-    req.user = decodedToken;
+
+    // Obtener datos adicionales del usuario desde Firestore
+    const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+
+    req.user = {
+      ...decodedToken,
+      role: userData.role || 'user',
+      name: userData.name || userData.displayName || decodedToken.email?.split('@')[0],
+      ...userData
+    };
+
     next();
   } catch (error) {
     console.error('Error verificando token:', error);
@@ -1758,6 +1769,210 @@ app.get('/getPermisosUsuario', verifyAuth, async (req, res) => {
   } catch (error) {
     console.error('Error al obtener permisos del usuario:', error);
     res.status(500).json({ error: 'Error al obtener permisos del usuario' });
+  }
+});
+
+// ============================================
+// ENDPOINTS PARA USUARIOS - SOLICITUDES
+// ============================================
+
+/**
+ * GET /getMisSolicitudesCertificados
+ * Obtiene todas las solicitudes de certificados del usuario autenticado
+ */
+app.get('/getMisSolicitudesCertificados', verifyAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    console.log('📥 Obteniendo solicitudes para usuario:', userId);
+
+    const solicitudesSnapshot = await db.collection('solicitudesCertificado')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const solicitudes = [];
+    solicitudesSnapshot.forEach(doc => {
+      const data = doc.data();
+      solicitudes.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate().toISOString(),
+        updatedAt: data.updatedAt?.toDate().toISOString()
+      });
+    });
+
+    console.log(`✅ Solicitudes encontradas: ${solicitudes.length}`);
+    res.json({ success: true, solicitudes });
+  } catch (error) {
+    console.error('❌ Error al obtener solicitudes del usuario:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /getSolicitudCertificadoDetalle/:solicitudId
+ * Obtiene los detalles completos de una solicitud específica
+ * Solo accesible por el propietario o admin/superAdmin
+ */
+app.get('/getSolicitudCertificadoDetalle/:solicitudId', verifyAuth, async (req, res) => {
+  try {
+    const { solicitudId } = req.params;
+    const userId = req.user.uid;
+    const userRole = req.user.role;
+
+    console.log('📄 Obteniendo detalle de solicitud:', solicitudId, 'para usuario:', userId);
+
+    const solicitudDoc = await db.collection('solicitudesCertificado').doc(solicitudId).get();
+
+    if (!solicitudDoc.exists) {
+      console.log('❌ Solicitud no encontrada');
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const solicitud = solicitudDoc.data();
+
+    // Verificar permisos: solo el propietario o admin puede ver
+    if (solicitud.userId !== userId && userRole !== 'admin' && userRole !== 'superAdmin') {
+      console.log('❌ Usuario sin permisos para ver esta solicitud');
+      return res.status(403).json({ error: 'No tienes permiso para ver esta solicitud' });
+    }
+
+    const solicitudData = {
+      id: solicitudDoc.id,
+      ...solicitud,
+      createdAt: solicitud.createdAt?.toDate().toISOString(),
+      updatedAt: solicitud.updatedAt?.toDate().toISOString()
+    };
+
+    console.log('✅ Solicitud obtenida correctamente');
+    res.json({ success: true, solicitud: solicitudData });
+  } catch (error) {
+    console.error('❌ Error al obtener detalle de solicitud:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /getComentariosSolicitud/:solicitudId
+ * Obtiene todos los comentarios de una solicitud
+ * Solo accesible por el propietario o admin/superAdmin
+ */
+app.get('/getComentariosSolicitud/:solicitudId', verifyAuth, async (req, res) => {
+  try {
+    const { solicitudId } = req.params;
+    const userId = req.user.uid;
+    const userRole = req.user.role;
+
+    console.log('💬 Obteniendo comentarios de solicitud:', solicitudId);
+
+    // Verificar que la solicitud existe y el usuario tiene permiso
+    const solicitudDoc = await db.collection('solicitudesCertificado').doc(solicitudId).get();
+
+    if (!solicitudDoc.exists) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const solicitud = solicitudDoc.data();
+
+    // Verificar permisos
+    if (solicitud.userId !== userId && userRole !== 'admin' && userRole !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permiso para ver estos comentarios' });
+    }
+
+    // Obtener comentarios de la subcolección
+    const comentariosSnapshot = await db.collection('solicitudesCertificado')
+      .doc(solicitudId)
+      .collection('comentarios')
+      .orderBy('createdAt', 'asc')
+      .get();
+
+    const comentarios = [];
+    comentariosSnapshot.forEach(doc => {
+      const data = doc.data();
+      comentarios.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate().toISOString()
+      });
+    });
+
+    console.log(`✅ Comentarios obtenidos: ${comentarios.length}`);
+    res.json({ success: true, comentarios });
+  } catch (error) {
+    console.error('❌ Error al obtener comentarios:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /agregarComentarioSolicitud
+ * Agrega un nuevo comentario a una solicitud
+ * Body: { solicitudId: string, texto: string }
+ */
+app.post('/agregarComentarioSolicitud', verifyAuth, async (req, res) => {
+  try {
+    const { solicitudId, texto } = req.body;
+    const userId = req.user.uid;
+    const userRole = req.user.role;
+    const userName = req.user.name;
+    const userEmail = req.user.email;
+
+    console.log('💬 Agregando comentario a solicitud:', solicitudId, 'por usuario:', userId);
+
+    // Validar datos
+    if (!solicitudId || !texto || !texto.trim()) {
+      return res.status(400).json({ error: 'solicitudId y texto son obligatorios' });
+    }
+
+    // Verificar que la solicitud existe y el usuario tiene permiso
+    const solicitudDoc = await db.collection('solicitudesCertificado').doc(solicitudId).get();
+
+    if (!solicitudDoc.exists) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const solicitud = solicitudDoc.data();
+
+    // Verificar permisos: solo propietario o admin
+    if (solicitud.userId !== userId && userRole !== 'admin' && userRole !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permiso para comentar en esta solicitud' });
+    }
+
+    // Crear el comentario
+    const comentario = {
+      solicitudId,
+      texto: texto.trim(),
+      userId,
+      userName: userName || userEmail.split('@')[0],
+      userEmail,
+      userRole: userRole || 'user',
+      createdAt: FieldValue.serverTimestamp()
+    };
+
+    // Guardar en subcolección de comentarios
+    const comentarioRef = await db.collection('solicitudesCertificado')
+      .doc(solicitudId)
+      .collection('comentarios')
+      .add(comentario);
+
+    // Actualizar timestamp de la solicitud
+    await db.collection('solicitudesCertificado').doc(solicitudId).update({
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    console.log('✅ Comentario agregado con ID:', comentarioRef.id);
+
+    res.json({
+      success: true,
+      comentario: {
+        id: comentarioRef.id,
+        ...comentario,
+        createdAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error al agregar comentario:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
