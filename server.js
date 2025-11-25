@@ -1519,6 +1519,248 @@ app.post('/admin/createUser', verifyAuth, async (req, res) => {
   }
 });
 
+// ====== Endpoint: Obtener solicitudes de certificados (solo superAdmin) ======
+app.get('/admin/getSolicitudesCertificados', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para acceder a este recurso' });
+    }
+
+    // Obtener todas las solicitudes de la colección 'solicitudesCertificado'
+    const solicitudesSnapshot = await db.collection('solicitudesCertificado')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const solicitudes = [];
+    solicitudesSnapshot.forEach(doc => {
+      const data = doc.data();
+      solicitudes.push({
+        id: doc.id,
+        ...data,
+        // Convertir timestamps de Firestore a formato ISO string
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+        fechaCreacion: data.fechaCreacion || data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+      });
+    });
+
+    console.log(`✅ [getSolicitudesCertificados] Enviando ${solicitudes.length} solicitudes`);
+    res.json({ ok: true, solicitudes });
+  } catch (error) {
+    console.error('Error al obtener solicitudes:', error);
+    res.status(500).json({ error: 'Error al obtener solicitudes de certificados' });
+  }
+});
+
+// ====== Endpoint: Cambiar estatus de certificado (solo superAdmin) ======
+app.post('/admin/cambiarEstatusCertificado', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para realizar esta acción' });
+    }
+
+    const { solicitudId, nuevoEstatus } = req.body;
+
+    if (!solicitudId || !nuevoEstatus) {
+      return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+    }
+
+    // Validar que el estatus sea válido
+    const estatusValidos = ['pendiente', 'en_proceso', 'aprobado', 'rechazado', 'completado'];
+    if (!estatusValidos.includes(nuevoEstatus)) {
+      return res.status(400).json({ error: 'Estatus no válido' });
+    }
+
+    // Obtener la solicitud actual
+    const solicitudRef = db.collection('solicitudesCertificado').doc(solicitudId);
+    const solicitudDoc = await solicitudRef.get();
+
+    if (!solicitudDoc.exists) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const solicitudData = solicitudDoc.data();
+    const estatusHistorial = solicitudData.estatusHistorial || [];
+
+    // Agregar el nuevo estatus al historial
+    estatusHistorial.push({
+      estatus: nuevoEstatus,
+      fecha: new Date().toISOString(),
+      cambiadoPor: req.user.uid,
+      nota: `Estatus cambiado de ${solicitudData.estatus || 'pendiente'} a ${nuevoEstatus}`
+    });
+
+    // Actualizar el documento
+    await solicitudRef.update({
+      estatus: nuevoEstatus,
+      estatusHistorial: estatusHistorial,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: req.user.uid
+    });
+
+    console.log(`✅ [cambiarEstatusCertificado] Solicitud ${solicitudId} → ${nuevoEstatus}`);
+    res.json({ ok: true, message: 'Estatus actualizado correctamente' });
+  } catch (error) {
+    console.error('Error al cambiar estatus:', error);
+    res.status(500).json({ error: 'Error al cambiar el estatus' });
+  }
+});
+
+// ====== Endpoint: Obtener permisos del dashboard (solo superAdmin) ======
+app.get('/admin/getPermisosDashboard', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para acceder a este recurso' });
+    }
+
+    // Obtener la configuración de permisos desde Firestore
+    const configRef = db.collection('config').doc('permisosDashboard');
+    const configDoc = await configRef.get();
+
+    if (!configDoc.exists) {
+      // Devolver configuración por defecto
+      const permisosDefault = {
+        director: {
+          analizador_videos: true,
+          carta_descriptiva: true,
+          buscador_materias: true,
+          solicitud_certificado: true
+        },
+        mentor: {
+          analizador_videos: true,
+          carta_descriptiva: true,
+          buscador_materias: true,
+          solicitud_certificado: false
+        },
+        user: {
+          analizador_videos: false,
+          carta_descriptiva: false,
+          buscador_materias: true,
+          solicitud_certificado: false
+        }
+      };
+
+      console.log('⚠️ [getPermisosDashboard] No hay configuración, usando defaults');
+      return res.json({ ok: true, permisos: permisosDefault });
+    }
+
+    console.log('✅ [getPermisosDashboard] Configuración cargada');
+    res.json({ ok: true, permisos: configDoc.data().permisos });
+  } catch (error) {
+    console.error('Error al obtener permisos:', error);
+    res.status(500).json({ error: 'Error al obtener permisos del dashboard' });
+  }
+});
+
+// ====== Endpoint: Guardar permisos del dashboard (solo superAdmin) ======
+app.post('/admin/guardarPermisosDashboard', verifyAuth, async (req, res) => {
+  try {
+    // Verificar que sea superAdmin
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'superAdmin') {
+      return res.status(403).json({ error: 'No tienes permisos para realizar esta acción' });
+    }
+
+    const { permisos } = req.body;
+
+    if (!permisos) {
+      return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+    }
+
+    // Validar estructura de permisos
+    const rolesRequeridos = ['director', 'mentor', 'user'];
+    for (const role of rolesRequeridos) {
+      if (!permisos[role]) {
+        return res.status(400).json({ error: `Falta configuración para el rol: ${role}` });
+      }
+    }
+
+    // Guardar la configuración en Firestore
+    const configRef = db.collection('config').doc('permisosDashboard');
+    await configRef.set({
+      permisos: permisos,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: req.user.uid
+    });
+
+    console.log(`✅ [guardarPermisosDashboard] Permisos actualizados por ${userDoc.data().email}`);
+    res.json({ ok: true, message: 'Permisos guardados correctamente' });
+  } catch (error) {
+    console.error('Error al guardar permisos:', error);
+    res.status(500).json({ error: 'Error al guardar permisos del dashboard' });
+  }
+});
+
+// ====== Endpoint: Obtener permisos del usuario (cualquier usuario autenticado) ======
+app.get('/getPermisosUsuario', verifyAuth, async (req, res) => {
+  try {
+    // Obtener el rol del usuario
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const userRole = userDoc.data().role;
+
+    // Si es superAdmin, tiene acceso a todo
+    if (userRole === 'superAdmin' || userRole === 'admin') {
+      return res.json({
+        ok: true,
+        permisos: {
+          analizador_videos: true,
+          carta_descriptiva: true,
+          buscador_materias: true,
+          solicitud_certificado: true
+        }
+      });
+    }
+
+    // Obtener la configuración de permisos
+    const configRef = db.collection('config').doc('permisosDashboard');
+    const configDoc = await configRef.get();
+
+    if (!configDoc.exists) {
+      // Usar permisos por defecto
+      const permisosDefault = {
+        director: {
+          analizador_videos: true,
+          carta_descriptiva: true,
+          buscador_materias: true,
+          solicitud_certificado: true
+        },
+        mentor: {
+          analizador_videos: true,
+          carta_descriptiva: true,
+          buscador_materias: true,
+          solicitud_certificado: false
+        },
+        user: {
+          analizador_videos: false,
+          carta_descriptiva: false,
+          buscador_materias: true,
+          solicitud_certificado: false
+        }
+      };
+
+      return res.json({ ok: true, permisos: permisosDefault[userRole] || permisosDefault.user });
+    }
+
+    const configData = configDoc.data();
+    const permisosUsuario = configData.permisos[userRole] || {};
+
+    res.json({ ok: true, permisos: permisosUsuario });
+  } catch (error) {
+    console.error('Error al obtener permisos del usuario:', error);
+    res.status(500).json({ error: 'Error al obtener permisos del usuario' });
+  }
+});
+
 // ====== Salud ======
 app.get('/health', async (_req, res) => {
   try {
